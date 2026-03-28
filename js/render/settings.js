@@ -20,6 +20,13 @@ function summaryLine(profile) {
 }
 
 function renderProfileTab(profile, weightEvolution) {
+  const photoUrl = state.profilePhotoPreview || profile.photoDataUrl || "";
+  const initials = (profile.name || "MC")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || "")
+    .join("") || "MC";
   return `
     <div class="card settings-section module-settings surface-settings">
       <div class="settings-section-head">
@@ -29,6 +36,25 @@ function renderProfileTab(profile, weightEvolution) {
           <p class="muted">Un cockpit plus rationnel: identité, préférences d’entraînement et poids suivi au même endroit.</p>
         </div>
         <span class="pill pill-alert">${escapeHtml(weightEvolution.currentWeightKg ? `${weightEvolution.currentWeightKg} kg` : "à compléter")}</span>
+      </div>
+
+      <div class="profile-hero">
+        <div class="profile-avatar-shell">
+          ${photoUrl
+            ? `<img class="profile-avatar-image" src="${photoUrl}" alt="Photo de profil" />`
+            : `<span class="profile-avatar-fallback">${escapeHtml(initials)}</span>`}
+        </div>
+        <div class="profile-hero-copy">
+          <div class="settings-subtitle">Photo de profil</div>
+          <p class="muted">Ajoute une photo carrée pour personnaliser le profil athlète dans l’app.</p>
+          <div class="profile-photo-actions">
+            <label class="btn btn-soft file-trigger">
+              <input id="profilePhotoInput" type="file" accept="image/*" hidden />
+              ${photoUrl ? "Changer la photo" : "Ajouter une photo"}
+            </label>
+            <button class="btn btn-outline" data-action="remove-profile-photo" ${photoUrl ? "" : "disabled"}>Retirer</button>
+          </div>
+        </div>
       </div>
 
       <div class="settings-subsection">
@@ -126,6 +152,9 @@ function renderProfileTab(profile, weightEvolution) {
 }
 
 function renderCoachTab(aiRuntime) {
+  const runtimeLabel = aiRuntime.source === "local-fallback"
+    ? "Fallback local"
+    : getCloudModeLabel();
   return `
     <div class="card settings-section module-settings surface-settings">
       <div class="settings-section-head">
@@ -134,7 +163,7 @@ function renderCoachTab(aiRuntime) {
           <h3>Réglages IA</h3>
           <p class="muted">Moins de décor, plus de contrôle: moteur, modèle, cloud et recherche web.</p>
         </div>
-        <span class="pill pill-calm">${escapeHtml(aiRuntime.source || state.aiConfig.mode)}</span>
+        <span class="pill pill-calm">${escapeHtml(runtimeLabel)}</span>
       </div>
 
       <div class="settings-subsection">
@@ -150,8 +179,8 @@ function renderCoachTab(aiRuntime) {
             <div class="field-shell surface-form">
               <select id="iaProviderMode">
                 <option value="local" ${state.aiConfig.mode === "local" ? "selected" : ""}>Local seulement</option>
-                <option value="proxy" ${state.aiConfig.mode === "proxy" ? "selected" : ""}>Proxy sécurisé</option>
-                <option value="direct" ${state.aiConfig.mode === "direct" ? "selected" : ""}>Direct OpenAI</option>
+                <option value="proxy" ${state.aiConfig.mode === "proxy" ? "selected" : ""}>Internet sécurisé (recommandé)</option>
+                <option value="direct" ${state.aiConfig.mode === "direct" ? "selected" : ""}>Internet direct</option>
               </select>
             </div>
           </div>
@@ -197,6 +226,10 @@ function renderCoachTab(aiRuntime) {
       </div>
 
       <div class="helper-note calm-note">
+        Internet sécurisé = appel cloud via ton proxy serveur.
+        • internet direct = appel OpenAI depuis le navigateur.
+        • local = moteur embarqué sans web.
+        <br />
         Mode ${escapeHtml(getCloudModeLabel())}
         • statut ${escapeHtml(aiRuntime.status || "idle")}
         • latence ${aiRuntime.latencyMs || 0} ms

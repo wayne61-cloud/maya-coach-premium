@@ -81,6 +81,52 @@ function getProfileFromDom() {
   };
 }
 
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Impossible de lire la photo"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function buildProfilePhotoDataUrl(file) {
+  if (!file) return "";
+  const source = await readFileAsDataUrl(file);
+  const image = await new Promise((resolve, reject) => {
+    const nextImage = new Image();
+    nextImage.onload = () => resolve(nextImage);
+    nextImage.onerror = () => reject(new Error("Impossible de charger la photo"));
+    nextImage.src = source;
+  });
+  const size = 240;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return source;
+  const ratio = Math.max(size / image.width, size / image.height);
+  const width = image.width * ratio;
+  const height = image.height * ratio;
+  const x = (size - width) / 2;
+  const y = (size - height) / 2;
+  ctx.fillStyle = "#120f14";
+  ctx.fillRect(0, 0, size, size);
+  ctx.drawImage(image, x, y, width, height);
+  return canvas.toDataURL("image/jpeg", 0.82);
+}
+
+async function resolveProfilePhotoForSave() {
+  const photoInput = document.getElementById("profilePhotoInput");
+  if (!(photoInput instanceof HTMLInputElement) || !photoInput.files?.length) {
+    return state.profilePhotoPreview || state.profile?.photoDataUrl || "";
+  }
+  const nextPhoto = await buildProfilePhotoDataUrl(photoInput.files[0]);
+  state.profilePhotoPreview = nextPhoto;
+  photoInput.value = "";
+  return nextPhoto;
+}
+
 function getSyncConfigFromDom() {
   return {
     endpoint: document.getElementById("syncEndpoint")?.value || state.syncConfig.endpoint,
@@ -192,9 +238,13 @@ function runNutritionAI() {
   refreshCurrentPage();
 }
 
-function saveProfileFromInputs() {
-  const nextProfile = updateProfile(getProfileFromDom());
+async function saveProfileFromInputs() {
+  const nextProfile = updateProfile({
+    ...getProfileFromDom(),
+    photoDataUrl: await resolveProfilePhotoForSave()
+  });
   state.onboardingDraft = { ...(state.onboardingDraft || {}), ...nextProfile };
+  state.profilePhotoPreview = "";
   scheduleAutoSync();
   showToast("Profil athlète enregistré");
   refreshCurrentPage();
@@ -253,7 +303,13 @@ async function routeAction(action, target) {
       refreshCurrentPage();
       return;
     case "save-profile":
-      saveProfileFromInputs();
+      await saveProfileFromInputs();
+      return;
+    case "remove-profile-photo":
+      updateProfile({ ...(state.profile || defaultProfile), photoDataUrl: "" });
+      state.profilePhotoPreview = "";
+      showToast("Photo de profil retirée");
+      refreshCurrentPage();
       return;
     case "request-notifications": {
       try {
@@ -518,6 +574,14 @@ function bindEvents() {
     if (target.id === "nutritionTagFilter") {
       state.nutritionFilter.tag = target.value;
       refreshCurrentPage();
+    }
+    if (target.id === "profilePhotoInput" && target instanceof HTMLInputElement && target.files?.length) {
+      buildProfilePhotoDataUrl(target.files[0])
+        .then((nextPhoto) => {
+          state.profilePhotoPreview = nextPhoto;
+          refreshCurrentPage();
+        })
+        .catch(() => showToast("Photo invalide"));
     }
   });
 }

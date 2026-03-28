@@ -28,8 +28,8 @@ export function getAppDiagnostics() {
 export function getCloudModeLabel() {
   const labels = {
     local: "Local",
-    proxy: "Proxy sécurisé",
-    direct: "Direct OpenAI"
+    proxy: "Internet sécurisé",
+    direct: "Internet direct"
   };
   return labels[state.aiConfig.mode] || "Local";
 }

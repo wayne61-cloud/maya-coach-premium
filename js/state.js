@@ -19,6 +19,7 @@ export const defaultProfile = {
   name: "",
   age: "",
   weightKg: "",
+  photoDataUrl: "",
   goal: "muscle",
   level: "2",
   frequency: "3",
@@ -43,6 +44,9 @@ export function sanitizeProfile(raw) {
     name: String(profile.name || "").trim().slice(0, 40),
     age: sanitizeNumericText(profile.age, { min: 10, max: 99 }),
     weightKg: sanitizeNumericText(profile.weightKg, { min: 35, max: 220, decimals: true }),
+    photoDataUrl: typeof profile.photoDataUrl === "string" && profile.photoDataUrl.startsWith("data:image/")
+      ? profile.photoDataUrl
+      : "",
     equipment: Array.isArray(profile.equipment) && profile.equipment.length ? profile.equipment : [...defaultProfile.equipment]
   };
 }
@@ -77,6 +81,7 @@ export const state = {
   settingsTab: "profile",
   launchDismissed: false,
   profile: storedProfile ? sanitizeProfile(storedProfile) : null,
+  profilePhotoPreview: "",
   profileSnapshots: Array.isArray(storedProfileSnapshots) ? storedProfileSnapshots : [],
   showOnboarding: !storedProfile,
   exoFilter: { search: "", mode: "all", muscle: "all", similarTo: "" },
