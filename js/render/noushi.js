@@ -4,13 +4,13 @@ import { escapeHtml } from "../utils.js";
 export function renderNoushi(node) {
   node.innerHTML = `
     <div class="section">
-      <div class="card">
+      <div class="card module-relax glow-violet">
         <h2>NOUSHI</h2>
         <p class="muted">Les protocoles NOUSHI créent maintenant une entrée d'historique pour impacter stats, streak et recovery score.</p>
       </div>
       <div class="list">
         ${NOUSHI_EXOS.map((item) => `
-          <article class="exercise-card">
+          <article class="exercise-card module-relax">
             <div class="exercise-title">${escapeHtml(item.nom)}</div>
             <div class="exercise-meta">
               <span class="pill">${item.temps} min</span>

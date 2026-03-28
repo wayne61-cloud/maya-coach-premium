@@ -38,10 +38,10 @@ export function renderHome(node) {
 
   node.innerHTML = `
     <div class="section">
-      <div class="card hero-card glow-gold">
+      <div class="card hero-card module-home glow-gold">
         <div class="hero-top">
           <div>
-            <div class="hero-greeting">Salut champion</div>
+            <div class="hero-greeting">Pôle coach</div>
             <div class="hero-title">Ta journée d'entraînement, nutrition et recovery dans une seule boucle.</div>
           </div>
           <button class="icon-btn ${state.profile ? "active" : ""}" data-action="go-page" data-page="settings" title="Paramètres">⚙</button>
@@ -65,16 +65,29 @@ export function renderHome(node) {
           <div class="muted">Objectif profil: ${escapeHtml(targetGoal)} • Niveau ${escapeHtml(state.profile?.level || "2")} • ${escapeHtml(state.profile?.sessionTime || "35")} min ciblées</div>
         </div>
 
-        <div class="actions-row two" style="margin-top: 10px;">
-          <button class="btn btn-main" data-action="quick-session">1. Générer la séance du jour</button>
-          <button class="btn btn-soft" data-action="go-page" data-page="workout">2. Voir le programme en cours</button>
-          <button class="btn btn-soft" data-action="go-page" data-page="stats">3. Voir la progression</button>
-          <button class="btn btn-soft" data-action="go-page" data-page="nutrition">4. Voir la nutrition du jour</button>
-          <button class="btn btn-soft" data-action="go-page" data-page="history">5. Reprendre une ancienne séance</button>
+        <div class="hero-actions" style="margin-top: 10px;">
+          <button class="btn btn-main hero-primary-btn" data-action="quick-session">Lancer ma séance du jour</button>
+          <button class="btn btn-soft" data-action="go-page" data-page="workout">Programme en cours</button>
+          <button class="btn btn-soft" data-action="go-page" data-page="stats">Voir ma progression</button>
+        </div>
+
+        <div class="support-strip" style="margin-top: 10px;">
+          <button class="mini-tile" data-action="go-page" data-page="nutrition">
+            <span class="mini-tile-kicker">Fuel</span>
+            <span class="mini-tile-title">Nutrition du jour</span>
+          </button>
+          <button class="mini-tile" data-action="go-page" data-page="history">
+            <span class="mini-tile-kicker">Replay</span>
+            <span class="mini-tile-title">Historique</span>
+          </button>
+          <button class="mini-tile" data-action="go-settings-tab" data-tab="profile">
+            <span class="mini-tile-kicker">Profil</span>
+            <span class="mini-tile-title">Paramètres athlète</span>
+          </button>
         </div>
       </div>
 
-      <div class="card search-module card-calm glow-blue">
+      <div class="card search-module module-stats glow-blue">
         <div class="search-module-head">
           <div>
             <h3>Recherche rapide</h3>
@@ -96,7 +109,7 @@ export function renderHome(node) {
         <div class="list">${globalResultsHtml}</div>
       </div>
 
-      <div class="card card-success glow-green">
+      <div class="card module-stats glow-blue">
         <h3>Tableau du jour</h3>
         <div class="stats-grid">
           <div class="stat-box stat-box-green"><div class="stat-label">Streak</div><div class="stat-value">${stats.streak} j</div></div>
@@ -127,7 +140,7 @@ export function renderHome(node) {
           </div>
         `}
 
-        <div class="plan-block card-recovery" style="margin-top: 10px;">
+        <div class="plan-block module-nutrition" style="margin-top: 10px;">
           <div class="plan-title">Nutrition reliée à l'entraînement</div>
           <div class="coach-grid">
             <div><strong>Charge du moment:</strong> ${escapeHtml(state.currentPlan?.metadata?.fatigueLoad ? `${state.currentPlan.metadata.fatigueLoad}/100` : "auto selon ta dernière séance")}</div>

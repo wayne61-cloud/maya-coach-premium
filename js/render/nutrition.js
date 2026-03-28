@@ -38,7 +38,7 @@ export function renderNutrition(node) {
 
   node.innerHTML = `
     <div class="section">
-      <div class="card search-module">
+      <div class="card search-module module-nutrition glow-green">
         <div class="search-module-head">
           <div>
             <h2>Nutrition premium</h2>
@@ -92,7 +92,7 @@ export function renderNutrition(node) {
         </div>
       </div>
 
-      <div class="card settings-section">
+      <div class="card settings-section module-nutrition">
         <h3>Nutrition IA du jour</h3>
         <div class="settings-grid compact-grid">
           <div class="field-group">
@@ -125,7 +125,7 @@ export function renderNutrition(node) {
         <div style="margin-top: 10px;">${renderNutritionDayPlan()}</div>
       </div>
 
-      <div class="card">
+      <div class="card module-nutrition">
         <h3>Recettes recommandées après ta charge du jour</h3>
         <div class="coach-grid">
           ${suggestions.map((recipe) => `<div>• ${escapeHtml(recipe.nom)} <span class="muted">(${recipe.prot} g prot, ${recipe.tags.join(", ")})</span></div>`).join("")}
@@ -134,7 +134,7 @@ export function renderNutrition(node) {
 
       <div class="list">
         ${recipes.length ? recipes.map((recipe) => `
-          <article class="exercise-card">
+          <article class="exercise-card module-nutrition">
             <div class="exercise-head">
               <div>
                 <div class="exercise-title">${escapeHtml(recipe.nom)}</div>

@@ -4,13 +4,13 @@ import { escapeHtml } from "../utils.js";
 export function renderRelax(node) {
   node.innerHTML = `
     <div class="section">
-      <div class="card">
+      <div class="card module-relax glow-violet">
         <h2>Relax</h2>
         <p class="muted">Chaque protocole Relax crée une trace recovery pour enrichir le streak et les stats de récupération.</p>
       </div>
       <div class="list">
         ${RELAX_DATA.map((item) => `
-          <article class="exercise-card">
+          <article class="exercise-card module-relax">
             <div class="exercise-title">${escapeHtml(item.nom)}</div>
             <div class="exercise-meta">
               <span class="pill">${item.temps} min</span>

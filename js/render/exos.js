@@ -23,7 +23,7 @@ export function renderExos(node) {
 
   node.innerHTML = `
     <div class="section">
-      <div class="card search-module">
+      <div class="card search-module module-exos glow-coral">
         <div class="search-module-head">
           <div>
             <h2>Bibliothèque exercices premium</h2>
@@ -62,7 +62,7 @@ export function renderExos(node) {
       </div>
 
       ${similar.length ? `
-        <div class="card">
+        <div class="card module-exos">
           <h3>Exos similaires à ${escapeHtml(similarHeadline)}</h3>
           <div class="coach-grid">
             ${similar.map((exercise) => `<div>• ${escapeHtml(exercise.nom)} <button class="btn btn-outline" style="margin-left: 8px;" data-action="open-exo-focus" data-id="${exercise.id}">Ouvrir</button></div>`).join("")}
@@ -72,7 +72,7 @@ export function renderExos(node) {
 
       <div class="list">
         ${exercises.length ? exercises.map((exercise) => `
-          <article class="exercise-card">
+          <article class="exercise-card module-exos">
             <div class="exercise-head">
               <div>
                 <div class="exercise-title">${escapeHtml(exercise.nom)}</div>

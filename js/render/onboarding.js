@@ -5,6 +5,7 @@ const steps = [
   {
     key: "identity",
     type: "fields",
+    marker: "ID",
     title: "Ton profil athlète",
     subtitle: "Nom, âge et poids aident l’IA à mieux doser l’impact, les variantes et la nutrition.",
     fields: [
@@ -15,6 +16,7 @@ const steps = [
   },
   {
     key: "goal",
+    marker: "OBJ",
     title: "Ton objectif principal",
     subtitle: "Ça pilote les volumes, le type de séance et les repas suggérés.",
     options: [
@@ -25,6 +27,7 @@ const steps = [
   },
   {
     key: "level",
+    marker: "LVL",
     title: "Ton niveau",
     subtitle: "On règle la difficulté des variantes et la progression du cycle.",
     options: [
@@ -35,6 +38,7 @@ const steps = [
   },
   {
     key: "frequency",
+    marker: "RYT",
     title: "Ta fréquence hebdo",
     subtitle: "On s'en sert pour le rythme de cycle et les rappels de progression.",
     options: [
@@ -45,6 +49,7 @@ const steps = [
   },
   {
     key: "place",
+    marker: "LIEU",
     title: "Ton terrain principal",
     subtitle: "L'app préfiltre maison, salle ou mixte dans les plans IA.",
     options: [
@@ -55,6 +60,7 @@ const steps = [
   },
   {
     key: "sessionTime",
+    marker: "TIME",
     title: "Durée moyenne par séance",
     subtitle: "Ça détermine le nombre de blocs et le niveau de densité.",
     options: [
@@ -74,29 +80,36 @@ export function renderOnboarding(node) {
 
   const step = steps[state.onboardingStep] || steps[0];
   const profileDraft = { ...defaultProfile, ...(state.onboardingDraft || {}) };
+  const stepNumber = state.onboardingStep + 1;
   const contentHtml = step.type === "fields"
     ? `
-        <div class="choice-grid">
+        <div class="onboarding-fields">
           ${step.fields.map(([key, label, placeholder, type]) => `
-            <div class="field-group">
+            <div class="onboarding-input-card surface-form">
               <label class="field-label" for="onboardingField-${escapeHtml(key)}">${escapeHtml(label)}</label>
-              <input
-                id="onboardingField-${escapeHtml(key)}"
-                data-onboarding-field="${escapeHtml(key)}"
-                type="${escapeHtml(type)}"
-                inputmode="${type === "number" ? "decimal" : "text"}"
-                placeholder="${escapeHtml(placeholder)}"
-                value="${escapeHtml(profileDraft[key] || "")}"
-              />
+              <div class="field-shell form-shell">
+                <input
+                  id="onboardingField-${escapeHtml(key)}"
+                  data-onboarding-field="${escapeHtml(key)}"
+                  type="${escapeHtml(type)}"
+                  inputmode="${type === "number" ? "decimal" : "text"}"
+                  placeholder="${escapeHtml(placeholder)}"
+                  value="${escapeHtml(profileDraft[key] || "")}"
+                />
+              </div>
             </div>
           `).join("")}
-          <div class="muted">Tu pourras ajuster ces infos plus tard depuis l’accueil.</div>
+          <div class="helper-note calm-note">Tu pourras ajuster ces infos plus tard depuis Paramètres.</div>
         </div>
       `
     : `
         <div class="choice-grid">
           ${step.options.map(([value, label, desc]) => `
             <button class="choice-card ${(profileDraft[step.key] || defaultProfile[step.key]) === value ? "active" : ""}" data-action="select-onboarding-option" data-key="${step.key}" data-value="${value}">
+              <div class="choice-card-top">
+                <span class="choice-marker">${escapeHtml(step.marker)}</span>
+                <span class="choice-state">${(profileDraft[step.key] || defaultProfile[step.key]) === value ? "Choisi" : "Option"}</span>
+              </div>
               <div class="choice-title">${escapeHtml(label)}</div>
               <div class="choice-sub">${escapeHtml(desc)}</div>
             </button>
@@ -107,14 +120,22 @@ export function renderOnboarding(node) {
   node.classList.add("active");
   node.innerHTML = `
     <div class="onboarding-card">
-      <div class="stepper">${steps.map((_, index) => `<span class="${index <= state.onboardingStep ? "active" : ""}"></span>`).join("")}</div>
-      <div>
-        <div class="eyebrow">Onboarding premium</div>
-        <h2>${escapeHtml(step.title)}</h2>
-        <p class="muted">${escapeHtml(step.subtitle)}</p>
+      <div class="onboarding-header">
+        <div class="onboarding-topline">
+          <div class="stepper">${steps.map((_, index) => `<span class="${index <= state.onboardingStep ? "active" : ""}"></span>`).join("")}</div>
+          <div class="onboarding-progress">Étape ${stepNumber}/${steps.length}</div>
+        </div>
+        <div class="onboarding-stage">
+          <div class="onboarding-icon">${escapeHtml(step.marker)}</div>
+          <div>
+            <div class="eyebrow">Onboarding premium</div>
+            <h2>${escapeHtml(step.title)}</h2>
+            <p class="muted">${escapeHtml(step.subtitle)}</p>
+          </div>
+        </div>
       </div>
-      ${contentHtml}
-      <div class="actions-row two">
+      <div class="onboarding-body">${contentHtml}</div>
+      <div class="actions-row two onboarding-actions">
         <button class="btn btn-outline" data-action="onboarding-back" ${state.onboardingStep === 0 ? "disabled" : ""}>Retour</button>
         <button class="btn btn-main" data-action="${state.onboardingStep === steps.length - 1 ? "finish-onboarding" : "onboarding-next"}">${state.onboardingStep === steps.length - 1 ? "Terminer" : "Continuer"}</button>
       </div>

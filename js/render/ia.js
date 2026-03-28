@@ -55,7 +55,7 @@ export function renderIA(node) {
 
   node.innerHTML = `
     <div class="section">
-      <div class="card">
+      <div class="card module-coach glow-gold">
         <h2>Coach IA premium</h2>
         <p class="muted">Page de travail IA: génération de séance, contrôle de l’énergie, exercice focus et explication du plan. Les paramètres techniques sont maintenant dans l’onglet Paramètres.</p>
 
@@ -161,7 +161,7 @@ export function renderIA(node) {
         </div>
       </div>
 
-      <div class="card">
+      <div class="card module-coach">
         <h3>Plan généré</h3>
         <div class="section">${renderPlan(currentPlan)}</div>
       </div>

@@ -22,19 +22,20 @@ export function renderStats(node) {
 
   node.innerHTML = `
     <div class="section">
-      <div class="card">
-        <h2>Stats premium</h2>
+      <div class="card module-stats glow-blue">
+        <div class="eyebrow">Pôle stats</div>
+        <h2>Tableau de progression</h2>
         <div class="stats-grid">
-          <div class="stat-box"><div class="stat-label">Total séances</div><div class="stat-value">${stats.totalSessions}</div></div>
-          <div class="stat-box"><div class="stat-label">Training</div><div class="stat-value">${stats.trainingSessions}</div></div>
-          <div class="stat-box"><div class="stat-label">Minutes actives</div><div class="stat-value">${Math.round(stats.activeMinutes)}</div></div>
-          <div class="stat-box"><div class="stat-label">Régularité nutrition</div><div class="stat-value">${stats.nutritionRegularity.score}%</div></div>
-          <div class="stat-box"><div class="stat-label">Maison / salle</div><div class="stat-value">${stats.placeSplit.maison}/${stats.placeSplit.salle}</div></div>
-          <div class="stat-box"><div class="stat-label">IA / focus / quick</div><div class="stat-value">${stats.aiVsQuick.ia}/${stats.aiVsQuick.focus}/${stats.aiVsQuick.quick}</div></div>
+          <div class="stat-box stat-box-blue stat-box-large"><div class="stat-label">Total séances</div><div class="stat-value">${stats.totalSessions}</div></div>
+          <div class="stat-box stat-box-blue stat-box-large"><div class="stat-label">Minutes actives</div><div class="stat-value">${Math.round(stats.activeMinutes)}</div></div>
+          <div class="stat-box stat-box-green"><div class="stat-label">Training</div><div class="stat-value">${stats.trainingSessions}</div></div>
+          <div class="stat-box stat-box-green"><div class="stat-label">Régularité nutrition</div><div class="stat-value">${stats.nutritionRegularity.score}%</div></div>
+          <div class="stat-box stat-box-coral"><div class="stat-label">Maison / salle</div><div class="stat-value">${stats.placeSplit.maison}/${stats.placeSplit.salle}</div></div>
+          <div class="stat-box stat-box-coral"><div class="stat-label">IA / focus / quick</div><div class="stat-value">${stats.aiVsQuick.ia}/${stats.aiVsQuick.focus}/${stats.aiVsQuick.quick}</div></div>
         </div>
       </div>
 
-      <div class="card">
+      <div class="card module-stats">
         <h3>Évolution corporelle</h3>
         <div class="coach-grid">
           <div><strong>Poids suivi:</strong> ${escapeHtml(weightEvolution.label)}</div>
@@ -42,27 +43,27 @@ export function renderStats(node) {
         </div>
       </div>
 
-      <div class="card">
+      <div class="card module-stats">
         <h3>Volume par muscle sur 7 jours</h3>
         <div class="bar-chart">${volume7d.length ? renderBars(volume7d) : '<div class="empty">Pas assez de données.</div>'}</div>
       </div>
 
-      <div class="card">
+      <div class="card module-stats">
         <h3>Volume sur 4 semaines</h3>
         <div class="bar-chart">${volume4w.length ? renderBars(volume4w) : '<div class="empty">Pas assez de données.</div>'}</div>
       </div>
 
-      <div class="card">
+      <div class="card module-stats">
         <h3>Meilleures séries par exercice</h3>
         <div class="bar-chart">${bestSeries.length ? renderBars(bestSeries) : '<div class="empty">Pas encore de records.</div>'}</div>
       </div>
 
-      <div class="card">
+      <div class="card module-stats">
         <h3>Séances hebdo sur 6 semaines</h3>
         <div class="bar-chart">${renderBars(stats.weekSeries.map((week) => ({ label: `S ${week.label}`, value: week.count })))}</div>
       </div>
 
-      <div class="card">
+      <div class="card module-stats">
         <h3>Calories estimées par mois</h3>
         <div class="bar-chart">${monthEntries.length ? renderBars(monthEntries) : '<div class="empty">Pas assez de données.</div>'}</div>
       </div>
