@@ -20,7 +20,8 @@ export async function registerServiceWorker() {
     return { ok: false, reason: "unsupported" };
   }
   try {
-    const registration = await navigator.serviceWorker.register("./sw.js");
+    const registration = await navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" });
+    await registration.update().catch(() => {});
     state.notificationConfig = {
       ...(state.notificationConfig || {}),
       serviceWorkerReady: true
