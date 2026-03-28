@@ -200,10 +200,18 @@ function saveProfileFromInputs() {
   refreshCurrentPage();
 }
 
+function openSettingsTab(tab) {
+  state.settingsTab = tab || "profile";
+  goToPage("settings");
+}
+
 async function routeAction(action, target) {
   switch (action) {
     case "go-page":
       goToPage(target.dataset.page);
+      return;
+    case "go-settings-tab":
+      openSettingsTab(target.dataset.tab);
       return;
     case "go-ia":
       goToPage("ia");

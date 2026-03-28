@@ -41,8 +41,9 @@ export function computeCoachRecommendations() {
       priority: 100,
       title: "Complète ton profil athlète",
       body: "Nom, âge et poids améliorent la personnalisation de l’IA, la nutrition du jour et le suivi d’évolution.",
-      action: "open-onboarding",
-      actionLabel: "Compléter"
+      action: "go-settings-tab",
+      actionLabel: "Profil",
+      actionPayload: { tab: "profile" }
     });
   }
 
@@ -99,8 +100,9 @@ export function computeCoachRecommendations() {
       priority: 60,
       title: "Active les notifications coach",
       body: "Tu recevras des rappels locaux et des recommandations utiles quand une séance ou une récupération est pertinente.",
-      action: "request-notifications",
-      actionLabel: "Activer"
+      action: "go-settings-tab",
+      actionLabel: "Ouvrir",
+      actionPayload: { tab: "sync" }
     });
   }
 
@@ -110,9 +112,9 @@ export function computeCoachRecommendations() {
       priority: 55,
       title: "Renforce le coach cloud",
       body: `Le mode actuel est ${getCloudModeLabel().toLowerCase()}. Configure le cloud pour activer la génération web-connectée et les tests live.`,
-      action: "go-page",
+      action: "go-settings-tab",
       actionLabel: "Configurer",
-      actionPayload: { page: "ia" }
+      actionPayload: { tab: "coach" }
     });
   }
 
@@ -122,9 +124,9 @@ export function computeCoachRecommendations() {
       priority: 50,
       title: "Prépare la sync multi-appareils",
       body: "La sync n’est pas encore branchée. Ajoute ton endpoint et ta magic link pour retrouver ton historique partout.",
-      action: "go-page",
+      action: "go-settings-tab",
       actionLabel: "Brancher",
-      actionPayload: { page: "ia" }
+      actionPayload: { tab: "sync" }
     });
   }
 

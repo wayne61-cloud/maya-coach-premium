@@ -74,6 +74,7 @@ const storedProfileSnapshots = loadJSON(STORAGE_KEYS.profileSnapshots, []);
 
 export const state = {
   page: "home",
+  settingsTab: "profile",
   launchDismissed: false,
   profile: storedProfile ? sanitizeProfile(storedProfile) : null,
   profileSnapshots: Array.isArray(storedProfileSnapshots) ? storedProfileSnapshots : [],

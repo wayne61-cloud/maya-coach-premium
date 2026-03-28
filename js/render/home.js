@@ -1,19 +1,19 @@
 import { getGlobalSearchResults } from "../catalog.js";
 import { getCycleHeadline } from "../ai.js";
-import { getCloudModeLabel, getAppDiagnostics } from "../diagnostics.js";
 import { getTrainingAwareRecipeSuggestions } from "../nutrition.js";
 import { computeCoachRecommendations, getWeightEvolution } from "../recommendations.js";
 import { state } from "../state.js";
 import { computeDashboardStats } from "../workout.js";
-import { buildEmptyState, escapeHtml, formatDateTime } from "../utils.js";
+import { buildEmptyState, escapeHtml } from "../utils.js";
 
 export function renderHome(node) {
   const stats = computeDashboardStats();
   const targetGoal = state.profile?.goal || "muscle";
   const nutritionSuggestions = getTrainingAwareRecipeSuggestions(targetGoal);
-  const diagnostics = getAppDiagnostics();
   const recommendations = computeCoachRecommendations();
   const weightEvolution = getWeightEvolution();
+  const dashboardRecommendations = recommendations.filter((item) => !["profile-completion", "notifications", "cloud-ai", "sync"].includes(item.id));
+  const topRecommendation = dashboardRecommendations[0] || null;
   const search = state.globalSearch || "";
   const searchResults = getGlobalSearchResults(search);
   const hasResults = searchResults.exercises.length || searchResults.recipes.length;
@@ -38,7 +38,7 @@ export function renderHome(node) {
 
   node.innerHTML = `
     <div class="section">
-      <div class="card hero-card">
+      <div class="card hero-card glow-gold">
         <div class="hero-top">
           <div>
             <div class="hero-greeting">Salut champion</div>
@@ -74,7 +74,7 @@ export function renderHome(node) {
         </div>
       </div>
 
-      <div class="card search-module">
+      <div class="card search-module card-calm glow-blue">
         <div class="search-module-head">
           <div>
             <h3>Recherche rapide</h3>
@@ -91,93 +91,53 @@ export function renderHome(node) {
           <button class="shortcut-chip" data-action="go-page" data-page="exos">Exos</button>
           <button class="shortcut-chip" data-action="go-page" data-page="nutrition">Nutrition</button>
           <button class="shortcut-chip" data-action="go-page" data-page="history">Historique</button>
-          <button class="shortcut-chip" data-action="go-page" data-page="settings">Paramètres</button>
+          <button class="shortcut-chip" data-action="go-settings-tab" data-tab="profile">Profil</button>
         </div>
         <div class="list">${globalResultsHtml}</div>
       </div>
 
-      <div class="card">
-        <h3>Progression premium</h3>
+      <div class="card card-success glow-green">
+        <h3>Tableau du jour</h3>
         <div class="stats-grid">
-          <div class="stat-box"><div class="stat-label">Streak</div><div class="stat-value">${stats.streak} j</div></div>
-          <div class="stat-box"><div class="stat-label">Séances semaine</div><div class="stat-value">${stats.weekSessions}</div></div>
-          <div class="stat-box"><div class="stat-label">Calories semaine</div><div class="stat-value">${Math.round(stats.weekCalories)}</div></div>
-          <div class="stat-box"><div class="stat-label">Record push</div><div class="stat-value">${stats.pushupRecord}</div></div>
+          <div class="stat-box stat-box-green"><div class="stat-label">Streak</div><div class="stat-value">${stats.streak} j</div></div>
+          <div class="stat-box stat-box-blue"><div class="stat-label">Séances semaine</div><div class="stat-value">${stats.weekSessions}</div></div>
+          <div class="stat-box stat-box-coral"><div class="stat-label">Calories semaine</div><div class="stat-value">${Math.round(stats.weekCalories)}</div></div>
+          <div class="stat-box stat-box-green"><div class="stat-label">Évolution</div><div class="stat-value">${escapeHtml(weightEvolution.currentWeightKg ? `${weightEvolution.currentWeightKg}kg` : "--")}</div></div>
         </div>
-      </div>
+        ${topRecommendation ? `
+          <div class="helper-note alert-note" style="margin-top: 10px;">
+            <strong>${escapeHtml(topRecommendation.title)}</strong><br />
+            ${escapeHtml(topRecommendation.body)}
+          </div>
+          <div class="actions-row two" style="margin-top: 10px;">
+            ${topRecommendation.action ? `
+              <button
+                class="btn btn-soft"
+                data-action="${escapeHtml(topRecommendation.action)}"
+                ${topRecommendation.actionPayload?.page ? `data-page="${escapeHtml(topRecommendation.actionPayload.page)}"` : ""}
+                ${topRecommendation.actionPayload?.tab ? `data-tab="${escapeHtml(topRecommendation.actionPayload.tab)}"` : ""}>
+                ${escapeHtml(topRecommendation.actionLabel || "Ouvrir")}
+              </button>
+            ` : ""}
+            <button class="btn btn-outline" data-action="go-settings-tab" data-tab="profile">Voir le profil</button>
+          </div>
+        ` : `
+          <div class="helper-note calm-note" style="margin-top: 10px;">
+            La home reste centrée sur l’action du jour. Les réglages avancés, la sync et les notifications vivent désormais dans le pôle Paramètres.
+          </div>
+        `}
 
-      <div class="card">
-        <h3>Profil et préférences</h3>
-        <div class="coach-grid">
-          <div><strong>Identité:</strong> ${escapeHtml(state.profile?.name || "Profil à compléter")} ${state.profile?.age ? `• ${escapeHtml(state.profile.age)} ans` : ""} ${state.profile?.weightKg ? `• ${escapeHtml(state.profile.weightKg)} kg` : ""}</div>
-          <div><strong>Objectif:</strong> ${escapeHtml(state.profile?.goal || "muscle")} • niveau ${escapeHtml(state.profile?.level || "2")} • ${escapeHtml(state.profile?.sessionTime || "35")} min</div>
-          <div><strong>Cadence:</strong> ${escapeHtml(state.profile?.frequency || "3")} séances/semaine • lieu ${escapeHtml(state.profile?.place || "mixte")}</div>
-          <div><strong>Évolution:</strong> ${escapeHtml(weightEvolution.label)}</div>
-        </div>
-        <div class="actions-row two" style="margin-top: 10px;">
-          <button class="btn btn-main" data-action="go-page" data-page="settings">Ouvrir les paramètres</button>
-          <button class="btn btn-outline" data-action="open-onboarding">Refaire l’onboarding</button>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>Recommandations du coach</h3>
-        <div class="list">
-          ${recommendations.length ? recommendations.map((item) => `
-            <div class="exercise-card recommendation-card">
-              <div class="exercise-title">${escapeHtml(item.title)}</div>
-              <div class="muted">${escapeHtml(item.body)}</div>
-              ${item.action ? `
-                <div class="actions-row two">
-                  <button
-                    class="btn btn-soft"
-                    data-action="${escapeHtml(item.action)}"
-                    ${item.actionPayload?.page ? `data-page="${escapeHtml(item.actionPayload.page)}"` : ""}>
-                    ${escapeHtml(item.actionLabel || "Ouvrir")}
-                  </button>
-                </div>
-              ` : ""}
-            </div>
-          `).join("") : buildEmptyState("Rien d’urgent", "Le coach n’a pas d’alerte prioritaire. Tu peux poursuivre ta progression normalement.", "", "")}
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>Nutrition reliée à l'entraînement</h3>
-        <div class="coach-grid">
-          <div><strong>Charge du moment:</strong> ${escapeHtml(state.currentPlan?.metadata?.fatigueLoad ? `${state.currentPlan.metadata.fatigueLoad}/100` : "auto selon ta dernière séance")}</div>
-          <div><strong>Recettes alignées:</strong></div>
-          ${nutritionSuggestions.map((recipe) => `<div>• ${escapeHtml(recipe.nom)} <span class="muted">(${recipe.categorie}, ${recipe.prot} g protéines)</span></div>`).join("")}
-        </div>
-        <div class="actions-row two" style="margin-top: 10px;">
-          <button class="btn btn-main" data-action="go-page" data-page="nutrition">Construire la journée nutrition</button>
-          <button class="btn btn-outline" data-action="go-page" data-page="ia">Passer par le coach IA</button>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>Stats produit</h3>
-        <div class="coach-grid">
-          <div><strong>Training:</strong> ${stats.trainingSessions} séances</div>
-          <div><strong>NOUSHI / Relax:</strong> ${(stats.sessionsByType.noushi || 0)} / ${(stats.sessionsByType.relax || 0)}</div>
-          <div><strong>Minutes actives:</strong> ${Math.round(stats.activeMinutes)} min</div>
-          <div><strong>Régularité nutrition:</strong> ${stats.nutritionRegularity.score}% sur 7 jours</div>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>Statut app, IA et sync</h3>
-        <div class="coach-grid">
-          <div><strong>Stockage local:</strong> ${diagnostics.storageOk ? "OK" : "indisponible"}</div>
-          <div><strong>Internet:</strong> ${diagnostics.online ? "connecté" : "hors ligne"}</div>
-          <div><strong>IA:</strong> ${escapeHtml(getCloudModeLabel())} • source ${escapeHtml(diagnostics.aiRuntime.source || "local")} • statut ${escapeHtml(diagnostics.aiRuntime.status || "idle")}</div>
-          <div><strong>Recherche web IA:</strong> ${state.aiConfig.webSearch ? "active" : "inactive"}</div>
-          <div><strong>Notifications:</strong> ${diagnostics.notificationSupported ? escapeHtml(diagnostics.notificationConfig.permission || "default") : "non supportées"}</div>
-          <div><strong>Sync:</strong> ${diagnostics.syncConfigured ? "configurée" : "à brancher"}${diagnostics.syncRuntime.lastSyncAt ? ` • ${escapeHtml(formatDateTime(diagnostics.syncRuntime.lastSyncAt))}` : ""}</div>
-        </div>
-        <div class="actions-row two" style="margin-top: 10px;">
-          <button class="btn btn-soft" data-action="request-notifications">Activer les notifications</button>
-          <button class="btn btn-outline" data-action="go-page" data-page="settings">Configurer IA et sync</button>
+        <div class="plan-block card-recovery" style="margin-top: 10px;">
+          <div class="plan-title">Nutrition reliée à l'entraînement</div>
+          <div class="coach-grid">
+            <div><strong>Charge du moment:</strong> ${escapeHtml(state.currentPlan?.metadata?.fatigueLoad ? `${state.currentPlan.metadata.fatigueLoad}/100` : "auto selon ta dernière séance")}</div>
+            <div><strong>Recettes alignées:</strong></div>
+            ${nutritionSuggestions.map((recipe) => `<div>• ${escapeHtml(recipe.nom)} <span class="muted">(${recipe.categorie}, ${recipe.prot} g protéines)</span></div>`).join("")}
+          </div>
+          <div class="actions-row two" style="margin-top: 10px;">
+            <button class="btn btn-main" data-action="go-page" data-page="nutrition">Construire la journée nutrition</button>
+            <button class="btn btn-outline" data-action="go-page" data-page="ia">Passer par le coach IA</button>
+          </div>
         </div>
       </div>
     </div>

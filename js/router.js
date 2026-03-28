@@ -41,6 +41,9 @@ export function refreshCurrentPage() {
 
 export function goToPage(page) {
   state.page = page;
+  if (page === "settings" && !state.settingsTab) {
+    state.settingsTab = "profile";
+  }
   document.querySelectorAll(".page").forEach((section) => section.classList.remove("active"));
   document.querySelectorAll(".nav-btn").forEach((button) => {
     button.classList.toggle("active", button.dataset.page === page);
