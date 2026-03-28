@@ -1,0 +1,22 @@
+{
+  "name": "MAYA Coach",
+  "short_name": "MAYA Coach",
+  "description": "Coach IA premium avec suivi d'évolution, nutrition et recovery.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#120902",
+  "theme_color": "#1f1204",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "./maya-coach-ui/web-opt/logo/maya-app-icon.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "./maya-coach-ui/web-opt/logo/maya-app-icon.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}

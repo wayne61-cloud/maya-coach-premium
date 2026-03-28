@@ -1,0 +1,20 @@
+{
+  "hero": "illustrations/maya_hero.png",
+  "logo": "logo/maya_coach_logo.png",
+  "button_generate": "ui/button_generate.png",
+  "nav_bottom": "ui/nav_bottom.png",
+  "icons": {
+    "home": "icons/icon_home.png",
+    "coach": "icons/icon_coach.png",
+    "exercises": "icons/icon_exercises.png",
+    "stats": "icons/icon_stats.png",
+    "hamburger": "icons/icon_hamburger.png",
+    "heart": "icons/icon_heart.png"
+  },
+  "tiles": {
+    "home": "illustrations/maya_tile_home.png",
+    "coach": "illustrations/maya_tile_coach.png",
+    "exercises": "ui/tile_exercises.png",
+    "stats": "ui/tile_stats.png"
+  }
+}

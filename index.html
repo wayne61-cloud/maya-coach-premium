@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#1f1204" />
+  <meta name="description" content="MAYA Coach: séances IA, suivi d'évolution, nutrition et recovery connectés." />
+  <link rel="icon" type="image/jpeg" href="./maya-coach-ui/web-opt/logo/maya-app-icon.jpg" />
+  <link rel="apple-touch-icon" href="./maya-coach-ui/web-opt/logo/maya-app-icon.jpg" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="stylesheet" href="./styles.css" />
+  <title>MAYA Coach</title>
+</head>
+<body>
+  <div class="launch-screen" id="launchScreen">
+    <div class="launch-card">
+      <img class="launch-image" src="./maya-coach-ui/web-opt/screens/home-reference.jpg" alt="MAYA Coach launch" />
+      <div class="launch-body">
+        <img class="launch-logo" src="./maya-coach-ui/web-opt/logo/maya-logo.png" alt="MAYA Coach logo" />
+        <div class="launch-title">MAYA Coach</div>
+        <div class="launch-sub">Coach IA, séances adaptatives, nutrition connectée et recovery piloté par les données.</div>
+        <button class="btn btn-main" id="btnEnterApp">Entrer dans MAYA Coach</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="app">
+    <header class="header">
+      <div class="header-side" id="headerDate">--/--</div>
+      <div class="header-title">
+        <img class="header-logo" src="./maya-coach-ui/web-opt/logo/maya-app-icon.jpg" alt="MAYA icon" />
+        MAYA Coach
+      </div>
+      <div class="header-side" id="headerClock">--:--</div>
+    </header>
+
+    <main class="container">
+      <section class="page active" id="page-home"></section>
+      <section class="page" id="page-ia"></section>
+      <section class="page" id="page-workout"></section>
+      <section class="page" id="page-exos"></section>
+      <section class="page" id="page-nutrition"></section>
+      <section class="page" id="page-history"></section>
+      <section class="page" id="page-stats"></section>
+      <section class="page" id="page-favoris"></section>
+      <section class="page" id="page-noushi"></section>
+      <section class="page" id="page-relax"></section>
+    </main>
+  </div>
+
+  <nav class="bottom-nav" id="mainNav">
+    <button class="nav-btn active" data-page="home">
+      <img class="nav-icon" src="./maya-coach-ui/web-opt/icons/home.jpg" alt="" />
+      <span>Accueil</span>
+    </button>
+    <button class="nav-btn" data-page="ia">
+      <img class="nav-icon" src="./maya-coach-ui/web-opt/icons/coach.jpg" alt="" />
+      <span>Coach</span>
+    </button>
+    <button class="nav-btn" data-page="exos">
+      <img class="nav-icon" src="./maya-coach-ui/web-opt/icons/exercises.jpg" alt="" />
+      <span>Exercices</span>
+    </button>
+    <button class="nav-btn" data-page="nutrition">
+      <img class="nav-icon" src="./maya-coach-ui/web-opt/icons/nutrition.jpg" alt="" />
+      <span>Nutrition</span>
+    </button>
+    <button class="nav-btn" data-page="stats">
+      <img class="nav-icon" src="./maya-coach-ui/web-opt/icons/stats.jpg" alt="" />
+      <span>Stats</span>
+    </button>
+    <button class="nav-btn" data-page="favoris">
+      <img class="nav-icon" src="./maya-coach-ui/web-opt/icons/heart.jpg" alt="" />
+      <span>Favoris</span>
+    </button>
+  </nav>
+
+  <div class="toast" id="toast"></div>
+  <div class="onboarding-shell" id="onboardingShell"></div>
+
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
