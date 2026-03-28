@@ -3,5 +3,6 @@ api/data/
 output/
 node_modules/
 .env
+.playwright-cli/
 bouahchi copie.html
 maya-coach.jpg

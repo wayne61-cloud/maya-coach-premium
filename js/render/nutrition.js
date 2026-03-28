@@ -38,66 +38,84 @@ export function renderNutrition(node) {
 
   node.innerHTML = `
     <div class="section">
-      <div class="card">
-        <h2>Nutrition premium</h2>
-        <p class="muted">Recettes high-protein, tags étendus, options végé/vegan et plan jour relié à la charge d'entraînement.</p>
-        <div class="split-3" style="margin-top: 10px;">
-          <div class="field-group">
-            <label class="field-label" for="nutritionSearch">Recherche</label>
-            <input id="nutritionSearch" type="text" placeholder="curry, bowl, tacos..." value="${escapeHtml(state.nutritionFilter.search)}" />
+      <div class="card search-module">
+        <div class="search-module-head">
+          <div>
+            <h2>Nutrition premium</h2>
+            <p class="muted">Recherche et filtres repensés avec une logique de search tray mobile inspirée de patterns Figma.</p>
           </div>
+          <span class="pill">${recipes.length} recettes</span>
+        </div>
+        <div class="search-shell">
+          <span class="search-icon" aria-hidden="true">⌕</span>
+          <input id="nutritionSearch" class="search-input" type="text" placeholder="curry, bowl, tacos..." value="${escapeHtml(state.nutritionFilter.search)}" />
+          <button class="search-clear ${state.nutritionFilter.search ? "visible" : ""}" data-action="clear-nutrition-search">Effacer</button>
+        </div>
+        <div class="filter-grid" style="margin-top: 10px;">
           <div class="field-group">
             <label class="field-label" for="nutritionCategory">Catégorie</label>
-            <select id="nutritionCategory">
-              ${[
-                ["all", "Toutes"],
-                ["petit-dej", "Petit-déj"],
-                ["dejeuner", "Déjeuner"],
-                ["collation", "Collation"],
-                ["diner", "Dîner"],
-                ["rapide", "Rapide <15 min"]
-              ].map(([value, label]) => `<option value="${value}" ${state.nutritionFilter.category === value ? "selected" : ""}>${label}</option>`).join("")}
-            </select>
+            <div class="field-shell">
+              <select id="nutritionCategory">
+                ${[
+                  ["all", "Toutes"],
+                  ["petit-dej", "Petit-déj"],
+                  ["dejeuner", "Déjeuner"],
+                  ["collation", "Collation"],
+                  ["diner", "Dîner"],
+                  ["rapide", "Rapide <15 min"]
+                ].map(([value, label]) => `<option value="${value}" ${state.nutritionFilter.category === value ? "selected" : ""}>${label}</option>`).join("")}
+              </select>
+            </div>
           </div>
           <div class="field-group">
             <label class="field-label" for="nutritionGoalFilter">Objectif</label>
-            <select id="nutritionGoalFilter">
-              ${[
-                ["all", "Tous"],
-                ["seche", "Sèche"],
-                ["masse", "Masse"],
-                ["maintenance", "Maintenance"]
-              ].map(([value, label]) => `<option value="${value}" ${state.nutritionFilter.goal === value ? "selected" : ""}>${label}</option>`).join("")}
-            </select>
+            <div class="field-shell">
+              <select id="nutritionGoalFilter">
+                ${[
+                  ["all", "Tous"],
+                  ["seche", "Sèche"],
+                  ["masse", "Masse"],
+                  ["maintenance", "Maintenance"]
+                ].map(([value, label]) => `<option value="${value}" ${state.nutritionFilter.goal === value ? "selected" : ""}>${label}</option>`).join("")}
+              </select>
+            </div>
           </div>
         </div>
         <div class="field-group">
           <label class="field-label" for="nutritionTagFilter">Tag</label>
-          <select id="nutritionTagFilter">
-            <option value="all">Tous les tags</option>
-            ${getAllRecipeTags().map((tag) => `<option value="${tag}" ${state.nutritionFilter.tag === tag ? "selected" : ""}>${escapeHtml(tag)}</option>`).join("")}
-          </select>
+          <div class="field-shell">
+            <select id="nutritionTagFilter">
+              <option value="all">Tous les tags</option>
+              ${getAllRecipeTags().map((tag) => `<option value="${tag}" ${state.nutritionFilter.tag === tag ? "selected" : ""}>${escapeHtml(tag)}</option>`).join("")}
+            </select>
+          </div>
         </div>
       </div>
 
-      <div class="card">
+      <div class="card settings-section">
         <h3>Nutrition IA du jour</h3>
-        <div class="split-3">
+        <div class="settings-grid compact-grid">
           <div class="field-group">
             <label class="field-label" for="nutriGoal">Objectif</label>
-            <select id="nutriGoal">
-              ${["seche", "masse", "maintenance"].map((goal) => `<option value="${goal}" ${(state.nutritionProfile?.goal || state.profile?.goal || "maintenance") === goal ? "selected" : ""}>${escapeHtml(goal)}</option>`).join("")}
-            </select>
+            <div class="field-shell">
+              <select id="nutriGoal">
+                ${["seche", "masse", "maintenance"].map((goal) => `<option value="${goal}" ${(state.nutritionProfile?.goal || state.profile?.goal || "maintenance") === goal ? "selected" : ""}>${escapeHtml(goal)}</option>`).join("")}
+              </select>
+            </div>
           </div>
           <div class="field-group">
             <label class="field-label" for="nutriWeight">Poids</label>
-            <input id="nutriWeight" type="number" min="35" max="180" value="${escapeHtml(state.nutritionProfile?.weightKg || state.profile?.weightKg || 75)}" />
+            <div class="field-shell">
+              <input id="nutriWeight" type="number" min="35" max="180" value="${escapeHtml(state.nutritionProfile?.weightKg || state.profile?.weightKg || 75)}" />
+            </div>
           </div>
           <div class="field-group">
             <label class="field-label" for="nutriActivity">Activité</label>
-            <select id="nutriActivity">
-              ${["low", "medium", "high"].map((activity) => `<option value="${activity}" ${(state.nutritionProfile?.activity || "medium") === activity ? "selected" : ""}>${escapeHtml(activity)}</option>`).join("")}
-            </select>
+            <div class="field-shell">
+              <select id="nutriActivity">
+                ${["low", "medium", "high"].map((activity) => `<option value="${activity}" ${(state.nutritionProfile?.activity || "medium") === activity ? "selected" : ""}>${escapeHtml(activity)}</option>`).join("")}
+              </select>
+            </div>
           </div>
         </div>
         <div class="actions-row two">

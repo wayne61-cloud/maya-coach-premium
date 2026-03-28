@@ -23,30 +23,40 @@ export function renderExos(node) {
 
   node.innerHTML = `
     <div class="section">
-      <div class="card">
-        <h2>Bibliothèque exercices premium</h2>
-        <p class="muted">Tous les patterns clés sont couverts: push, pull, squat, hinge, core, carry et conditioning, avec variantes maison, salle et progression.</p>
-        <div class="split-3" style="margin-top: 10px;">
-          <div class="field-group">
-            <label class="field-label" for="exoSearch">Recherche exo</label>
-            <input id="exoSearch" type="text" placeholder="tractions, carry, burpee..." value="${escapeHtml(state.exoFilter.search)}" />
+      <div class="card search-module">
+        <div class="search-module-head">
+          <div>
+            <h2>Bibliothèque exercices premium</h2>
+            <p class="muted">Refonte inspirée de patterns Figma search mobile: barre dominante, compteur, puis filtres compacts sous la saisie.</p>
           </div>
+          <span class="pill">${exercises.length} exos</span>
+        </div>
+        <div class="search-shell">
+          <span class="search-icon" aria-hidden="true">⌕</span>
+          <input id="exoSearch" class="search-input" type="text" placeholder="tractions, carry, burpee..." value="${escapeHtml(state.exoFilter.search)}" />
+          <button class="search-clear ${state.exoFilter.search ? "visible" : ""}" data-action="clear-exo-search">Effacer</button>
+        </div>
+        <div class="filter-grid" style="margin-top: 10px;">
           <div class="field-group">
             <label class="field-label" for="exoMode">Mode</label>
-            <select id="exoMode">
-              ${[
-                ["all", "Tous"],
-                ["maison", "Maison"],
-                ["salle", "Salle"]
-              ].map(([value, label]) => `<option value="${value}" ${state.exoFilter.mode === value ? "selected" : ""}>${label}</option>`).join("")}
-            </select>
+            <div class="field-shell">
+              <select id="exoMode">
+                ${[
+                  ["all", "Tous"],
+                  ["maison", "Maison"],
+                  ["salle", "Salle"]
+                ].map(([value, label]) => `<option value="${value}" ${state.exoFilter.mode === value ? "selected" : ""}>${label}</option>`).join("")}
+              </select>
+            </div>
           </div>
           <div class="field-group">
             <label class="field-label" for="exoMuscle">Muscle</label>
-            <select id="exoMuscle">
-              <option value="all">Tous</option>
-              ${getAllMuscles().map((muscle) => `<option value="${muscle}" ${state.exoFilter.muscle === muscle ? "selected" : ""}>${escapeHtml(muscle)}</option>`).join("")}
-            </select>
+            <div class="field-shell">
+              <select id="exoMuscle">
+                <option value="all">Tous</option>
+                ${getAllMuscles().map((muscle) => `<option value="${muscle}" ${state.exoFilter.muscle === muscle ? "selected" : ""}>${escapeHtml(muscle)}</option>`).join("")}
+              </select>
+            </div>
           </div>
         </div>
       </div>

@@ -44,7 +44,7 @@ export function renderHome(node) {
             <div class="hero-greeting">Salut champion</div>
             <div class="hero-title">Ta journée d'entraînement, nutrition et recovery dans une seule boucle.</div>
           </div>
-          <button class="icon-btn ${state.profile ? "active" : ""}" data-action="open-onboarding" title="Profil">⚙</button>
+          <button class="icon-btn ${state.profile ? "active" : ""}" data-action="go-page" data-page="settings" title="Paramètres">⚙</button>
         </div>
 
         <div class="brand-hero">
@@ -74,11 +74,24 @@ export function renderHome(node) {
         </div>
       </div>
 
-      <div class="card">
-        <h3>Recherche globale</h3>
-        <div class="field-group">
-          <label class="field-label" for="globalSearch">Exos, recettes, modules</label>
-          <input id="globalSearch" type="text" placeholder="pull-up, bowl, relax..." value="${escapeHtml(search)}" />
+      <div class="card search-module">
+        <div class="search-module-head">
+          <div>
+            <h3>Recherche rapide</h3>
+            <p class="muted">Inspirée d’un module search Figma mobile: saisie centrale, compteur de résultats et raccourcis utiles.</p>
+          </div>
+          <span class="pill">${hasResults ? `${searchResults.exercises.length + searchResults.recipes.length} résultats` : "bibliothèque"}</span>
+        </div>
+        <div class="search-shell">
+          <span class="search-icon" aria-hidden="true">⌕</span>
+          <input id="globalSearch" class="search-input" type="text" placeholder="pull-up, bowl, relax..." value="${escapeHtml(search)}" />
+          <button class="search-clear ${search ? "visible" : ""}" data-action="clear-global-search">Effacer</button>
+        </div>
+        <div class="search-shortcuts">
+          <button class="shortcut-chip" data-action="go-page" data-page="exos">Exos</button>
+          <button class="shortcut-chip" data-action="go-page" data-page="nutrition">Nutrition</button>
+          <button class="shortcut-chip" data-action="go-page" data-page="history">Historique</button>
+          <button class="shortcut-chip" data-action="go-page" data-page="settings">Paramètres</button>
         </div>
         <div class="list">${globalResultsHtml}</div>
       </div>
@@ -94,29 +107,16 @@ export function renderHome(node) {
       </div>
 
       <div class="card">
-        <h3>Profil athlète</h3>
-        <div class="split-3">
-          <div class="field-group">
-            <label class="field-label" for="profileName">Nom</label>
-            <input id="profileName" type="text" placeholder="Ton prénom" value="${escapeHtml(state.profile?.name || "")}" />
-          </div>
-          <div class="field-group">
-            <label class="field-label" for="profileAge">Âge</label>
-            <input id="profileAge" type="number" min="10" max="99" placeholder="29" value="${escapeHtml(state.profile?.age || "")}" />
-          </div>
-          <div class="field-group">
-            <label class="field-label" for="profileWeight">Poids (kg)</label>
-            <input id="profileWeight" type="number" min="35" max="220" step="0.1" placeholder="74" value="${escapeHtml(state.profile?.weightKg || "")}" />
-          </div>
-        </div>
+        <h3>Profil et préférences</h3>
         <div class="coach-grid">
+          <div><strong>Identité:</strong> ${escapeHtml(state.profile?.name || "Profil à compléter")} ${state.profile?.age ? `• ${escapeHtml(state.profile.age)} ans` : ""} ${state.profile?.weightKg ? `• ${escapeHtml(state.profile.weightKg)} kg` : ""}</div>
           <div><strong>Objectif:</strong> ${escapeHtml(state.profile?.goal || "muscle")} • niveau ${escapeHtml(state.profile?.level || "2")} • ${escapeHtml(state.profile?.sessionTime || "35")} min</div>
           <div><strong>Cadence:</strong> ${escapeHtml(state.profile?.frequency || "3")} séances/semaine • lieu ${escapeHtml(state.profile?.place || "mixte")}</div>
           <div><strong>Évolution:</strong> ${escapeHtml(weightEvolution.label)}</div>
         </div>
         <div class="actions-row two" style="margin-top: 10px;">
-          <button class="btn btn-main" data-action="save-profile">Enregistrer le profil</button>
-          <button class="btn btn-outline" data-action="open-onboarding">Ajuster le plan de base</button>
+          <button class="btn btn-main" data-action="go-page" data-page="settings">Ouvrir les paramètres</button>
+          <button class="btn btn-outline" data-action="open-onboarding">Refaire l’onboarding</button>
         </div>
       </div>
 
@@ -177,7 +177,7 @@ export function renderHome(node) {
         </div>
         <div class="actions-row two" style="margin-top: 10px;">
           <button class="btn btn-soft" data-action="request-notifications">Activer les notifications</button>
-          <button class="btn btn-outline" data-action="go-page" data-page="ia">Configurer IA et sync</button>
+          <button class="btn btn-outline" data-action="go-page" data-page="settings">Configurer IA et sync</button>
         </div>
       </div>
     </div>

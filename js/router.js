@@ -9,6 +9,7 @@ import { renderStats } from "./render/stats.js";
 import { renderFavoris } from "./render/favoris.js";
 import { renderNoushi } from "./render/noushi.js";
 import { renderRelax } from "./render/relax.js";
+import { renderSettings } from "./render/settings.js";
 import { renderOnboarding } from "./render/onboarding.js";
 
 const renderers = {
@@ -21,7 +22,8 @@ const renderers = {
   stats: renderStats,
   favoris: renderFavoris,
   noushi: renderNoushi,
-  relax: renderRelax
+  relax: renderRelax,
+  settings: renderSettings
 };
 
 function getPageNode(page) {

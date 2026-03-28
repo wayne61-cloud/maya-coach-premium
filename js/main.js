@@ -23,6 +23,11 @@ function updateClock() {
   document.getElementById("headerClock").textContent = now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 }
 
+function syncViewportHeight() {
+  const viewportHeight = window.visualViewport?.height || window.innerHeight;
+  document.documentElement.style.setProperty("--app-height", `${Math.round(viewportHeight)}px`);
+}
+
 function toggleFavorite(type, id) {
   const key = `${type}:${id}`;
   if (state.favorites.has(key)) {
@@ -67,7 +72,12 @@ function getProfileFromDom() {
     ...(state.profile || defaultProfile),
     name: document.getElementById("profileName")?.value || state.profile?.name || "",
     age: document.getElementById("profileAge")?.value || state.profile?.age || "",
-    weightKg: document.getElementById("profileWeight")?.value || state.profile?.weightKg || ""
+    weightKg: document.getElementById("profileWeight")?.value || state.profile?.weightKg || "",
+    goal: document.getElementById("profileGoal")?.value || state.profile?.goal || defaultProfile.goal,
+    level: document.getElementById("profileLevel")?.value || state.profile?.level || defaultProfile.level,
+    frequency: document.getElementById("profileFrequency")?.value || state.profile?.frequency || defaultProfile.frequency,
+    place: document.getElementById("profilePlace")?.value || state.profile?.place || defaultProfile.place,
+    sessionTime: document.getElementById("profileSessionTime")?.value || state.profile?.sessionTime || defaultProfile.sessionTime
   };
 }
 
@@ -206,6 +216,18 @@ async function routeAction(action, target) {
       return;
     case "generate-plan":
       await handleGeneratePlan();
+      return;
+    case "clear-global-search":
+      state.globalSearch = "";
+      refreshCurrentPage();
+      return;
+    case "clear-exo-search":
+      state.exoFilter.search = "";
+      refreshCurrentPage();
+      return;
+    case "clear-nutrition-search":
+      state.nutritionFilter.search = "";
+      refreshCurrentPage();
       return;
     case "start-generated-plan":
       runGeneratedPlan();
@@ -493,6 +515,7 @@ function bindEvents() {
 }
 
 function init() {
+  syncViewportHeight();
   updateClock();
   setInterval(updateClock, 15000);
   refreshNotificationPermission();
@@ -500,10 +523,13 @@ function init() {
   registerServiceWorker().catch(() => {});
   startNotificationPulse();
   if (typeof window !== "undefined") {
+    window.addEventListener("resize", syncViewportHeight);
+    window.visualViewport?.addEventListener("resize", syncViewportHeight);
     window.addEventListener("online", refreshCurrentPage);
     window.addEventListener("offline", refreshCurrentPage);
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) {
+        syncViewportHeight();
         refreshNotificationPermission();
         notifyTopRecommendation(false).catch(() => {});
         refreshCurrentPage();
