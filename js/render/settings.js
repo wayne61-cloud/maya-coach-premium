@@ -406,6 +406,13 @@ export function renderSettings(node) {
   const weightEvolution = getWeightEvolution();
   const recommendations = computeCoachRecommendations().slice(0, 3);
   const activeTab = state.settingsTab || "profile";
+  const photoUrl = state.profilePhotoPreview || profile.photoDataUrl || "";
+  const initials = (profile.name || "MC")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || "")
+    .join("") || "MC";
 
   let panelHtml = renderProfileTab(profile, weightEvolution);
   if (activeTab === "coach") panelHtml = renderCoachTab(state.aiRuntime);
@@ -416,20 +423,36 @@ export function renderSettings(node) {
     <div class="section settings-page">
       <div class="card settings-hero module-settings surface-settings">
         <div class="eyebrow">Pôle paramètres</div>
-        <h2>Paramètres, profil et pilotage</h2>
-        <p class="muted">Une interface plus cockpit que marketing: sections nettes, réglages groupés et lecture rapide des états système.</p>
-        <div class="settings-summary-grid">
-          <div class="summary-chip summary-chip-blue">
-            <span class="summary-label">Profil</span>
-            <strong>${escapeHtml(summaryLine(profile) || "À compléter")}</strong>
+        <div class="settings-hero-grid">
+          <div class="settings-identity-card">
+            <div class="settings-identity-avatar">
+              ${photoUrl
+                ? `<img class="athlete-avatar-image" src="${photoUrl}" alt="Photo de profil" />`
+                : `<span class="athlete-avatar-fallback">${escapeHtml(initials)}</span>`}
+            </div>
+            <div class="settings-identity-copy">
+              <h2>Paramètres, profil et pilotage</h2>
+              <p class="muted">Un cockpit plus net: identité athlète, IA, sync et diagnostic sans bruit décoratif.</p>
+              <div class="hero-chips">
+                <span class="pill">${escapeHtml(summaryLine(profile) || "Profil à compléter")}</span>
+                <span class="pill">${escapeHtml(weightEvolution.currentWeightKg ? `${weightEvolution.currentWeightKg} kg` : "poids non suivi")}</span>
+              </div>
+            </div>
           </div>
-          <div class="summary-chip summary-chip-green">
-            <span class="summary-label">IA</span>
-            <strong>${escapeHtml(getCloudModeLabel())}</strong>
-          </div>
-          <div class="summary-chip summary-chip-coral">
-            <span class="summary-label">Sync</span>
-            <strong>${diagnostics.syncConfigured ? "Configurée" : "Locale"}</strong>
+
+          <div class="settings-summary-grid">
+            <div class="summary-chip summary-chip-blue">
+              <span class="summary-label">Profil</span>
+              <strong>${escapeHtml(summaryLine(profile) || "À compléter")}</strong>
+            </div>
+            <div class="summary-chip summary-chip-green">
+              <span class="summary-label">IA</span>
+              <strong>${escapeHtml(getCloudModeLabel())}</strong>
+            </div>
+            <div class="summary-chip summary-chip-coral">
+              <span class="summary-label">Sync</span>
+              <strong>${diagnostics.syncConfigured ? "Configurée" : "Locale"}</strong>
+            </div>
           </div>
         </div>
       </div>

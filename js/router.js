@@ -26,8 +26,31 @@ const renderers = {
   settings: renderSettings
 };
 
+const PAGE_LABELS = {
+  home: "Accueil",
+  ia: "Coach IA",
+  workout: "Séance",
+  exos: "Bibliothèque",
+  nutrition: "Nutrition",
+  history: "Progression",
+  stats: "Stats",
+  favoris: "Favoris",
+  noushi: "NOUSHI",
+  relax: "Recovery",
+  settings: "Profil"
+};
+
 function getPageNode(page) {
   return document.getElementById(`page-${page}`);
+}
+
+function syncShell(page) {
+  const app = document.querySelector(".app");
+  if (app) app.dataset.page = page;
+  const labelNode = document.getElementById("headerPageLabel");
+  if (labelNode) {
+    labelNode.textContent = PAGE_LABELS[page] || "MAYA Coach";
+  }
 }
 
 export function refreshCurrentPage() {
@@ -36,6 +59,7 @@ export function refreshCurrentPage() {
   if (renderer && pageNode) {
     renderer(pageNode);
   }
+  syncShell(state.page);
   renderOnboarding(document.getElementById("onboardingShell"));
 }
 
@@ -50,6 +74,7 @@ export function goToPage(page) {
   });
   const pageNode = getPageNode(page);
   if (pageNode) pageNode.classList.add("active");
+  syncShell(page);
   refreshCurrentPage();
 }
 

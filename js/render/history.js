@@ -309,6 +309,10 @@ export function renderHistory(node) {
         <h2>Progression, tendances et badges</h2>
         <p class="muted">Un historique plus visuel, plus pilotable, avec une lecture d’évolution proche des apps activité modernes.</p>
         ${renderHistoryRings(stats)}
+        <div class="actions-row two" style="margin-top: 12px;">
+          <button class="btn btn-soft" data-action="go-page" data-page="stats">Ouvrir les stats avancées</button>
+          <button class="btn btn-outline" data-action="go-page" data-page="ia">Préparer la prochaine séance</button>
+        </div>
       </div>
 
       <div class="card module-stats">
