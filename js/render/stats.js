@@ -31,7 +31,7 @@ export function renderStats(node) {
           <div class="stat-box stat-box-green"><div class="stat-label">Training</div><div class="stat-value">${stats.trainingSessions}</div></div>
           <div class="stat-box stat-box-green"><div class="stat-label">Régularité nutrition</div><div class="stat-value">${stats.nutritionRegularity.score}%</div></div>
           <div class="stat-box stat-box-coral"><div class="stat-label">Maison / salle</div><div class="stat-value">${stats.placeSplit.maison}/${stats.placeSplit.salle}</div></div>
-          <div class="stat-box stat-box-coral"><div class="stat-label">IA / focus / quick</div><div class="stat-value">${stats.aiVsQuick.ia}/${stats.aiVsQuick.focus}/${stats.aiVsQuick.quick}</div></div>
+          <div class="stat-box stat-box-coral"><div class="stat-label">IA / focus / quick / manuel</div><div class="stat-value">${stats.aiVsQuick.ia}/${stats.aiVsQuick.focus}/${stats.aiVsQuick.quick}/${stats.aiVsQuick.manual}</div></div>
         </div>
       </div>
 

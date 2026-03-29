@@ -1,6 +1,6 @@
 import { EXO_BY_ID, EXOS, getSimilarExercises, zoneMuscles } from "./catalog.js";
 import { scheduleAutoSync } from "./sync.js";
-import { state, persistCycleState, persistFeedbackTrend, persistHistory } from "./state.js";
+import { defaultCustomWorkoutDraft, state, persistCycleState, persistFeedbackTrend, persistHistory } from "./state.js";
 import { getNutritionRegularity } from "./nutrition.js";
 import { average, clamp, dayKey, formatShortDate, parseDurationToken, parseRepsValue, sameWeek, sum, uid } from "./utils.js";
 
@@ -149,6 +149,161 @@ export function buildAdjustedPlan(entry, mode) {
     coherenceScore: mode === "harder" ? 89 : 84
   };
   return basePlan;
+}
+
+function inferZoneFromBlocks(blocks) {
+  const muscles = blocks
+    .map((block) => EXO_BY_ID.get(block.exerciseId)?.muscle || "")
+    .filter(Boolean);
+  const upper = ["poitrine", "dos", "epaules", "triceps", "biceps", "arriere-epaules", "grip"];
+  const lower = ["quadriceps", "ischios", "fessiers", "mollets"];
+  if (muscles.length && muscles.every((muscle) => upper.includes(muscle))) return "haut";
+  if (muscles.length && muscles.every((muscle) => lower.includes(muscle))) return "bas";
+  if (muscles.length && muscles.every((muscle) => muscle === "core")) return "core";
+  return "full";
+}
+
+export function buildCustomPlanFromDraft(draft = state.customWorkoutDraft) {
+  const rawBlocks = Array.isArray(draft?.blocks) ? draft.blocks : [];
+  const blocks = rawBlocks
+    .map((block) => {
+      const exercise = EXO_BY_ID.get(block.exerciseId);
+      if (!exercise) return null;
+      const sets = clamp(parseInt(block.sets, 10) || 0, 1, 8);
+      const restSec = clamp(parseInt(block.restSec, 10) || 0, 20, 240);
+      const reps = String(block.reps || "").trim();
+      if (!sets || !restSec || !reps) return null;
+      return {
+        exerciseId: exercise.id,
+        sets,
+        reps,
+        restSec,
+        tempo: exercise.tempo
+      };
+    })
+    .filter(Boolean);
+
+  if (!blocks.length) return null;
+
+  const plan = {
+    id: uid("plan"),
+    createdAt: new Date().toISOString(),
+    title: String(draft?.title || "Séance personnalisée").trim() || "Séance personnalisée",
+    inputs: {
+      time: 0,
+      place: draft?.place || state.profile?.place || "maison",
+      zone: inferZoneFromBlocks(blocks),
+      goal: draft?.objective || state.profile?.goal || "muscle",
+      energy: "normal",
+      level: state.profile?.level || "2",
+      cycleWeek: state.cycleState.cycleWeek,
+      manual: true
+    },
+    warmup: ["2 min mobilisation générale", "1 série légère sur le premier exo", "Respiration + mise en route"],
+    blocks,
+    finisher: "Finisher libre selon ton énergie du jour.",
+    coachReasoning: [
+      "Séance construite manuellement par l’athlète.",
+      "Le suivi live, la fiche de résultat et la comparaison à la dernière fois restent actifs."
+    ],
+    estimatedDurationMin: 0
+  };
+  plan.estimatedDurationMin = estimateDuration(plan);
+  return plan;
+}
+
+export function resetCustomWorkoutDraft() {
+  state.customWorkoutDraft = structuredClone(defaultCustomWorkoutDraft);
+}
+
+function findPreviousExercisePerformance(exerciseId) {
+  for (const entry of state.history) {
+    if (entry.type !== "training") continue;
+    const previousExercise = (entry.exercises || []).find((exercise) => exercise.id === exerciseId);
+    if (previousExercise) {
+      return {
+        entry,
+        exercise: previousExercise
+      };
+    }
+  }
+  return null;
+}
+
+function findPreviousComparableSession(exerciseIds) {
+  for (const entry of state.history) {
+    if (entry.type !== "training") continue;
+    const overlap = (entry.exercises || []).filter((exercise) => exerciseIds.includes(exercise.id)).length;
+    if (overlap > 0) {
+      return { entry, overlap };
+    }
+  }
+  return null;
+}
+
+function compareExercises(exercises) {
+  return exercises.map((exercise) => {
+    const previous = findPreviousExercisePerformance(exercise.id);
+    if (!previous) {
+      return {
+        ...exercise,
+        comparison: {
+          status: "first",
+          label: "Première référence enregistrée",
+          deltaVolume: exercise.repsCompleted,
+          deltaSets: exercise.setsDone,
+          previousDate: "",
+          previousRepsCompleted: 0,
+          previousSetsDone: 0
+        }
+      };
+    }
+    const deltaVolume = exercise.repsCompleted - (previous.exercise.repsCompleted || 0);
+    const deltaSets = exercise.setsDone - (previous.exercise.setsDone || 0);
+    const status = deltaVolume > 0 || deltaSets > 0
+      ? "up"
+      : deltaVolume < 0 || deltaSets < 0
+        ? "down"
+        : "equal";
+    const label = status === "up"
+      ? `Progression vs ${formatShortDate(previous.entry.date)}`
+      : status === "down"
+        ? `En dessous du ${formatShortDate(previous.entry.date)}`
+        : `Stable vs ${formatShortDate(previous.entry.date)}`;
+    return {
+      ...exercise,
+      comparison: {
+        status,
+        label,
+        deltaVolume,
+        deltaSets,
+        previousDate: previous.entry.date,
+        previousRepsCompleted: previous.exercise.repsCompleted || 0,
+        previousSetsDone: previous.exercise.setsDone || 0
+      }
+    };
+  });
+}
+
+function buildSessionComparison(exercises, volume) {
+  const exerciseIds = exercises.map((exercise) => exercise.id);
+  const comparable = findPreviousComparableSession(exerciseIds);
+  const comparedExercises = exercises.filter((exercise) => exercise.comparison?.status && exercise.comparison.status !== "first");
+  const improvedExercises = exercises.filter((exercise) => exercise.comparison?.status === "up").length;
+  const regressedExercises = exercises.filter((exercise) => exercise.comparison?.status === "down").length;
+  const stableExercises = exercises.filter((exercise) => exercise.comparison?.status === "equal").length;
+  const previousVolume = comparable?.entry?.volume || 0;
+  return {
+    comparedExercises: comparedExercises.length,
+    improvedExercises,
+    regressedExercises,
+    stableExercises,
+    previousSessionDate: comparable?.entry?.date || "",
+    previousSessionTitle: comparable?.entry?.title || "",
+    previousSessionVolume: previousVolume,
+    deltaTotalVolume: comparable ? volume - previousVolume : volume,
+    overlapCount: comparable?.overlap || 0
+  };
 }
 
 export function startPlan(plan) {
@@ -301,6 +456,7 @@ export function finishWorkout(forceStop = false) {
       modified: entryProgress.modified
     };
   });
+  const comparedExercises = compareExercises(exercises);
   const completedSets = sum(exercises.map((exercise) => exercise.setsDone));
   const volume = sum(exercises.map((exercise) => exercise.repsCompleted));
   const volumeByMuscle = exercises.reduce((accumulator, exercise) => {
@@ -319,7 +475,13 @@ export function finishWorkout(forceStop = false) {
     id: uid("session"),
     date: new Date().toISOString(),
     title: plan.title,
-    source: plan.inputs?.quick ? "quick" : plan.inputs?.preferredExerciseId ? "focus" : "ia",
+    source: plan.inputs?.manual
+      ? "manual"
+      : plan.inputs?.quick
+        ? "quick"
+        : plan.inputs?.preferredExerciseId
+          ? "focus"
+          : "ia",
     type: "training",
     objective: plan.inputs?.goal || "muscle",
     zone: plan.inputs?.zone || "full",
@@ -336,13 +498,15 @@ export function finishWorkout(forceStop = false) {
     fatigueInput: plan.inputs?.energy || "normal",
     difficulty,
     difficultyRpe: forceStop ? 9 : trainingLoad === "high" ? 8 : trainingLoad === "low" ? 6 : 7,
-    exercises,
+    exercises: comparedExercises,
     warmup: plan.warmup,
     finisher: plan.finisher,
     metadata: plan.metadata || null,
     feedback: null,
-    coachNote: ""
+    coachNote: "",
+    comparison: null
   };
+  entry.comparison = buildSessionComparison(comparedExercises, volume);
   entry.coachNote = buildCoachNote(entry);
 
   state.history.unshift(entry);
@@ -418,7 +582,10 @@ export function applyFeedback(entryId, feedback) {
 }
 
 export function getLatestPostWorkoutEntry() {
-  return state.postWorkoutId ? state.history.find((entry) => entry.id === state.postWorkoutId) : null;
+  if (state.postWorkoutId) {
+    return state.history.find((entry) => entry.id === state.postWorkoutId) || null;
+  }
+  return state.history.find((entry) => entry.type === "training") || null;
 }
 
 export function computeDashboardStats() {
@@ -445,7 +612,7 @@ export function computeDashboardStats() {
   const volume4w = {};
   const sessionsByType = {};
   const placeSplit = { maison: 0, salle: 0, mixte: 0 };
-  const aiVsQuick = { ia: 0, quick: 0, focus: 0 };
+  const aiVsQuick = { ia: 0, quick: 0, focus: 0, manual: 0 };
   const monthlyCalories = {};
   const bestSetByExercise = {};
   let weekSessions = 0;
@@ -458,6 +625,7 @@ export function computeDashboardStats() {
     if (entry.source === "ia") aiVsQuick.ia += 1;
     if (entry.source === "quick") aiVsQuick.quick += 1;
     if (entry.source === "focus") aiVsQuick.focus += 1;
+    if (entry.source === "manual") aiVsQuick.manual += 1;
     activeMinutes += entry.durationRealMin || entry.durationMin || 0;
 
     const monthDate = new Date(entry.date);

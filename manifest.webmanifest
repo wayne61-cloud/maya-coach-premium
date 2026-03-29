@@ -2,7 +2,7 @@
   "name": "MAYA Coach",
   "short_name": "MAYA Coach",
   "description": "Coach IA premium avec suivi d'évolution, nutrition et recovery.",
-  "start_url": "./index.html?v=20260329-1",
+  "start_url": "./index.html?v=20260329-2",
   "display": "standalone",
   "background_color": "#120902",
   "theme_color": "#1f1204",

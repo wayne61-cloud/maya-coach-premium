@@ -1,11 +1,11 @@
-const CACHE_NAME = "maya-coach-shell-v3-20260329-1";
+const CACHE_NAME = "maya-coach-shell-v4-20260329-2";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./index.html?v=20260329-1",
-  "./styles.css?v=20260329-1",
-  "./manifest.webmanifest?v=20260329-1",
-  "./js/main.js?v=20260329-1"
+  "./index.html?v=20260329-2",
+  "./styles.css?v=20260329-2",
+  "./manifest.webmanifest?v=20260329-2",
+  "./js/main.js?v=20260329-2"
 ];
 
 function isSameOrigin(request) {

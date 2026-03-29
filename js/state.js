@@ -44,6 +44,16 @@ export const defaultProfile = {
   equipment: ["aucun", "elastique"]
 };
 
+export const defaultCustomWorkoutDraft = {
+  title: "Séance personnalisée",
+  objective: "muscle",
+  place: "maison",
+  blocks: [
+    { id: "block_1", exerciseId: "pushup_classic", sets: "3", reps: "10-12", restSec: "60" },
+    { id: "block_2", exerciseId: "squat_bodyweight", sets: "3", reps: "10-12", restSec: "75" }
+  ]
+};
+
 function sanitizeNumericText(value, { min = 0, max = 999, decimals = false } = {}) {
   const raw = String(value ?? "").trim().replace(",", ".");
   if (!raw) return "";
@@ -126,7 +136,8 @@ export const state = {
     preferredZone: "",
     preferredGoal: ""
   },
-  protocolDraft: null
+  protocolDraft: null,
+  customWorkoutDraft: structuredClone(defaultCustomWorkoutDraft)
 };
 
 export function saveStateSlice(key, value) {

@@ -154,8 +154,8 @@ export function renderHome(node) {
         ${renderHubCard({
           accentClass: "hub-card-history",
           kicker: "Progression",
-          title: "Historique",
-          copy: "Anneaux, courbe, badges et replay des séances.",
+          title: "Pôle progrès",
+          copy: "Courbe, badges, comparaison et suivi des séances.",
           page: "history"
         })}
         ${renderHubCard({

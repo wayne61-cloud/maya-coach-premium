@@ -776,6 +776,17 @@ select:focus {
   padding: 11px;
 }
 
+.custom-block-card {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 142, 110, 0.16);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(255, 142, 110, 0.12), transparent 40%),
+    linear-gradient(180deg, rgba(36, 20, 23, 0.96), rgba(18, 12, 16, 0.98));
+}
+
 .recommendation-card {
   gap: 8px;
 }

@@ -1,14 +1,14 @@
 import { buildAdaptiveInputsFromHistory, generateAIPlan, generatePlanWithCloudFallback, prefillAIFromExercise, testAIConfig, updateAIConfig } from "./ai.js";
-import { EXO_BY_ID, NOUSHI_BY_ID, RECIPE_BY_ID, RELAX_BY_ID } from "./catalog.js";
+import { EXO_BY_ID, EXOS, NOUSHI_BY_ID, RECIPE_BY_ID, RELAX_BY_ID } from "./catalog.js";
 import { getAppDiagnostics } from "./diagnostics.js";
 import { notifyTopRecommendation, refreshNotificationPermission, registerServiceWorker, requestNotificationPermission, startNotificationPulse } from "./notifications.js";
 import { buildDailyMealPlan, inferTrainingLoad, saveNutritionPlan } from "./nutrition.js";
 import { goToPage, initRouter, refreshCurrentPage } from "./router.js";
 import { computeCoachRecommendations } from "./recommendations.js";
 import { pullSyncSnapshot, pushSyncSnapshot, requestMagicLink, scheduleAutoSync, updateSyncConfig } from "./sync.js";
-import { defaultProfile, persistFavorites, state, updateProfile } from "./state.js";
+import { defaultCustomWorkoutDraft, defaultProfile, persistFavorites, state, updateProfile } from "./state.js";
 import { APP_VERSION } from "./version.js";
-import { applyFeedback, buildAdjustedPlan, buildMinimalPlanAroundExercise, createProtocolHistoryEntry, finishWorkout, historyEntryToPlan, startPlan, workoutDoneAction, workoutModifyAction, workoutSkipAction } from "./workout.js";
+import { applyFeedback, buildAdjustedPlan, buildCustomPlanFromDraft, buildMinimalPlanAroundExercise, createProtocolHistoryEntry, finishWorkout, historyEntryToPlan, resetCustomWorkoutDraft, startPlan, workoutDoneAction, workoutModifyAction, workoutSkipAction } from "./workout.js";
 
 function showToast(message) {
   const toast = document.getElementById("toast");
@@ -262,6 +262,73 @@ function openSettingsTab(tab) {
   goToPage("settings");
 }
 
+function ensureCustomWorkoutDraft() {
+  if (!state.customWorkoutDraft) {
+    state.customWorkoutDraft = structuredClone(defaultCustomWorkoutDraft);
+  }
+}
+
+function updateCustomWorkoutField(field, value) {
+  ensureCustomWorkoutDraft();
+  state.customWorkoutDraft = {
+    ...state.customWorkoutDraft,
+    [field]: value
+  };
+}
+
+function updateCustomWorkoutBlock(blockId, field, value) {
+  ensureCustomWorkoutDraft();
+  state.customWorkoutDraft = {
+    ...state.customWorkoutDraft,
+    blocks: (state.customWorkoutDraft.blocks || []).map((block) => (
+      block.id === blockId
+        ? { ...block, [field]: value }
+        : block
+    ))
+  };
+}
+
+function addCustomWorkoutBlock() {
+  ensureCustomWorkoutDraft();
+  const usedExerciseIds = new Set((state.customWorkoutDraft.blocks || []).map((block) => block.exerciseId));
+  const fallbackExercise = EXOS.find((exercise) => !usedExerciseIds.has(exercise.id)) || EXOS[0];
+  state.customWorkoutDraft = {
+    ...state.customWorkoutDraft,
+    blocks: [
+      ...(state.customWorkoutDraft.blocks || []),
+      {
+        id: `block_${Date.now()}`,
+        exerciseId: fallbackExercise?.id || "pushup_classic",
+        sets: "3",
+        reps: "10-12",
+        restSec: "60"
+      }
+    ]
+  };
+}
+
+function removeCustomWorkoutBlock(blockId) {
+  ensureCustomWorkoutDraft();
+  const nextBlocks = (state.customWorkoutDraft.blocks || []).filter((block) => block.id !== blockId);
+  if (!nextBlocks.length) return false;
+  state.customWorkoutDraft = {
+    ...state.customWorkoutDraft,
+    blocks: nextBlocks
+  };
+  return true;
+}
+
+function startCustomWorkout() {
+  const plan = buildCustomPlanFromDraft(state.customWorkoutDraft);
+  if (!plan) {
+    showToast("Séance personnalisée incomplète");
+    return;
+  }
+  startPlan(plan);
+  goToPage("workout");
+  showToast("Séance personnalisée démarrée");
+}
+
 async function routeAction(action, target) {
   switch (action) {
     case "go-page":
@@ -296,6 +363,22 @@ async function routeAction(action, target) {
       return;
     case "start-generated-plan":
       runGeneratedPlan();
+      return;
+    case "add-custom-block":
+      addCustomWorkoutBlock();
+      refreshCurrentPage();
+      return;
+    case "remove-custom-block":
+      if (removeCustomWorkoutBlock(target.dataset.id)) {
+        refreshCurrentPage();
+      }
+      return;
+    case "reset-custom-workout":
+      resetCustomWorkoutDraft();
+      refreshCurrentPage();
+      return;
+    case "start-custom-workout":
+      startCustomWorkout();
       return;
     case "save-ai-config":
       updateAIConfig(getAIConfigFromDom());
@@ -526,7 +609,7 @@ function bindEvents() {
     await routeAction(target.dataset.action, target);
   });
 
-  document.addEventListener("input", (event) => {
+    document.addEventListener("input", (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
     if (target.dataset?.onboardingField) {
@@ -548,6 +631,13 @@ function bindEvents() {
     if (target.id === "nutritionSearch") {
       state.nutritionFilter.search = target.value;
       refreshCurrentPage();
+    }
+    if (target.dataset?.customWorkoutField) {
+      updateCustomWorkoutField(target.dataset.customWorkoutField, target.value);
+      return;
+    }
+    if (target.dataset?.customBlockField && target.dataset?.customBlockId) {
+      updateCustomWorkoutBlock(target.dataset.customBlockId, target.dataset.customBlockField, target.value);
     }
   });
 
@@ -581,6 +671,14 @@ function bindEvents() {
     if (target.id === "nutritionTagFilter") {
       state.nutritionFilter.tag = target.value;
       refreshCurrentPage();
+    }
+    if (target.dataset?.customWorkoutField) {
+      updateCustomWorkoutField(target.dataset.customWorkoutField, target.value);
+      return;
+    }
+    if (target.dataset?.customBlockField && target.dataset?.customBlockId) {
+      updateCustomWorkoutBlock(target.dataset.customBlockId, target.dataset.customBlockField, target.value);
+      return;
     }
     if (target.id === "profilePhotoInput" && target instanceof HTMLInputElement && target.files?.length) {
       buildProfilePhotoDataUrl(target.files[0])

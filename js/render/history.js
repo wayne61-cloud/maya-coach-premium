@@ -264,6 +264,14 @@ function renderHistoryEntry(entry) {
         <div><strong>Coach note:</strong> ${escapeHtml(entry.coachNote || "-")}</div>
       </div>
 
+      ${entry.comparison ? `
+        <div class="helper-note ${entry.comparison.improvedExercises > 0 ? "success-note" : "calm-note"}">
+          ${entry.comparison.previousSessionDate
+            ? `Vs ${escapeHtml(formatShortDate(entry.comparison.previousSessionDate))}: ${entry.comparison.improvedExercises || 0} exos en hausse, delta session ${entry.comparison.deltaTotalVolume > 0 ? "+" : ""}${entry.comparison.deltaTotalVolume || 0}.`
+            : "Première séance de référence sur ce format."}
+        </div>
+      ` : ""}
+
       ${entry.type === "training" ? `
         <div class="feedback-strip">
           <button class="feedback-chip ${entry.feedback === "dur" ? "active feedback-hard" : ""}" data-action="apply-feedback" data-id="${entry.id}" data-feedback="dur">Trop dur</button>
@@ -305,9 +313,9 @@ export function renderHistory(node) {
   node.innerHTML = `
     <div class="section">
       <div class="card module-stats glow-blue">
-        <div class="eyebrow">Pôle historique</div>
-        <h2>Progression, tendances et badges</h2>
-        <p class="muted">Un historique plus visuel, plus pilotable, avec une lecture d’évolution proche des apps activité modernes.</p>
+        <div class="eyebrow">Pôle progression</div>
+        <h2>Progression, suivi et badges</h2>
+        <p class="muted">Le hub de progression: charge, fréquence, tendances et comparaison de tes séances dans le temps.</p>
         ${renderHistoryRings(stats)}
         <div class="actions-row two" style="margin-top: 12px;">
           <button class="btn btn-soft" data-action="go-page" data-page="stats">Ouvrir les stats avancées</button>
