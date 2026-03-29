@@ -1,5 +1,6 @@
 import { EXO_BY_ID } from "../catalog.js";
 import { getCycleHeadline } from "../ai.js";
+import { getAppDiagnostics } from "../diagnostics.js";
 import { state } from "../state.js";
 import { buildEmptyState, escapeHtml, formatDateTime } from "../utils.js";
 
@@ -47,6 +48,7 @@ function renderPlan(plan) {
 }
 
 export function renderIA(node) {
+  const diagnostics = getAppDiagnostics();
   const draft = state.aiDraft || {};
   const profile = state.profile || {};
   const currentPlan = state.currentPlan;
@@ -159,6 +161,11 @@ export function renderIA(node) {
           <br />
           <strong>Réglages avancés:</strong> disponibles dans l’onglet Paramètres
         </div>
+        ${diagnostics.proxyPublicBlocked ? `
+          <div class="helper-note alert-note" style="margin-top: 10px;">
+            Ici, le proxy sécurisé pointe encore vers <strong>localhost</strong>. Sur l’app publique, l’IA utilisera donc le moteur local tant qu’aucun proxy public n’est branché.
+          </div>
+        ` : ""}
       </div>
 
       <div class="card module-coach">

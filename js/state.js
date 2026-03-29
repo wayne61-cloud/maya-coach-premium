@@ -1,15 +1,31 @@
 import { STORAGE_KEYS, loadJSON, saveJSON } from "./storage.js";
 import { dayKey } from "./utils.js";
 
+function isLocalHostEnvironment() {
+  if (typeof window === "undefined") return true;
+  return ["localhost", "127.0.0.1"].includes(window.location.hostname);
+}
+
+function isLoopbackEndpoint(endpoint) {
+  return /^(https?:\/\/)?(localhost|127\.0\.0\.1)(:\d+)?/i.test(String(endpoint || "").trim());
+}
+
 export function sanitizeAIConfig(raw) {
   const config = raw || {};
-  const mode = ["local", "proxy", "direct"].includes(config.mode) ? config.mode : "proxy";
+  const localHost = isLocalHostEnvironment();
+  const requestedMode = ["local", "proxy", "direct"].includes(config.mode)
+    ? config.mode
+    : (localHost ? "proxy" : "local");
+  const proxyEndpoint = typeof config.proxyEndpoint === "string" && config.proxyEndpoint.trim()
+    ? config.proxyEndpoint.trim()
+    : (localHost ? "http://localhost:8787/api/maya-coach" : "");
+  const mode = requestedMode === "proxy" && !localHost && (!proxyEndpoint || isLoopbackEndpoint(proxyEndpoint))
+    ? "local"
+    : requestedMode;
   return {
     mode,
     model: typeof config.model === "string" && config.model.trim() ? config.model.trim() : "gpt-4.1-mini",
-    proxyEndpoint: typeof config.proxyEndpoint === "string" && config.proxyEndpoint.trim()
-      ? config.proxyEndpoint.trim()
-      : "http://localhost:8787/api/maya-coach",
+    proxyEndpoint,
     apiKey: typeof config.apiKey === "string" ? config.apiKey.trim() : "",
     webSearch: Boolean(config.webSearch)
   };

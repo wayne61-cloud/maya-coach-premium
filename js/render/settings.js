@@ -152,7 +152,7 @@ function renderProfileTab(profile, weightEvolution) {
   `;
 }
 
-function renderCoachTab(aiRuntime) {
+function renderCoachTab(aiRuntime, diagnostics) {
   const runtimeLabel = aiRuntime.source === "local-fallback"
     ? "Fallback local"
     : getCloudModeLabel();
@@ -237,6 +237,13 @@ function renderCoachTab(aiRuntime) {
         ${aiRuntime.lastCheckedAt ? `• ${escapeHtml(formatDateTime(aiRuntime.lastCheckedAt))}` : ""}
         ${aiRuntime.error ? `• ${escapeHtml(aiRuntime.error)}` : ""}
       </div>
+
+      ${diagnostics.proxyPublicBlocked ? `
+        <div class="helper-note alert-note">
+          Sur la version publique, le mode <strong>Internet sécurisé</strong> ne peut pas utiliser un endpoint <strong>localhost</strong>.
+          L’app repasse donc en local tant qu’aucun proxy public n’est déployé.
+        </div>
+      ` : ""}
 
       <div class="actions-row two">
         <button class="btn btn-main" data-action="save-ai-config">Sauvegarder IA</button>
@@ -420,7 +427,7 @@ export function renderSettings(node) {
     .join("") || "MC";
 
   let panelHtml = renderProfileTab(profile, weightEvolution);
-  if (activeTab === "coach") panelHtml = renderCoachTab(state.aiRuntime);
+  if (activeTab === "coach") panelHtml = renderCoachTab(state.aiRuntime, diagnostics);
   if (activeTab === "sync") panelHtml = renderSyncTab(state.syncRuntime, diagnostics);
   if (activeTab === "app") panelHtml = renderAppTab(diagnostics, stats, recommendations);
 

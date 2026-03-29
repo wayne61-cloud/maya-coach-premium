@@ -1,12 +1,25 @@
 import { storageAvailable } from "./storage.js";
 import { state } from "./state.js";
 
+function isLocalHostEnvironment() {
+  if (typeof window === "undefined") return true;
+  return ["localhost", "127.0.0.1"].includes(window.location.hostname);
+}
+
+function isLoopbackEndpoint(endpoint) {
+  return /^(https?:\/\/)?(localhost|127\.0\.0\.1)(:\d+)?/i.test(String(endpoint || "").trim());
+}
+
 export function getAppDiagnostics() {
   const online = typeof navigator === "undefined" ? true : navigator.onLine;
   const notificationSupported = typeof window !== "undefined" && "Notification" in window;
   const serviceWorkerSupported = typeof navigator !== "undefined" && "serviceWorker" in navigator;
+  const localHost = isLocalHostEnvironment();
+  const proxyPublicBlocked = state.aiConfig.mode === "proxy"
+    && !localHost
+    && isLoopbackEndpoint(state.aiConfig.proxyEndpoint);
   const cloudConfigured = state.aiConfig.mode === "proxy"
-    ? Boolean(state.aiConfig.proxyEndpoint)
+    ? Boolean(state.aiConfig.proxyEndpoint) && !proxyPublicBlocked
     : state.aiConfig.mode === "direct"
       ? Boolean(state.aiConfig.apiKey)
       : false;
@@ -17,6 +30,8 @@ export function getAppDiagnostics() {
     notificationSupported,
     serviceWorkerSupported,
     cloudConfigured,
+    proxyPublicBlocked,
+    localHost,
     syncConfigured: Boolean(state.syncConfig.endpoint && state.syncConfig.token),
     aiMode: state.aiConfig.mode,
     aiRuntime: state.aiRuntime,
