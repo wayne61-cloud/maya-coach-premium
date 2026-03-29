@@ -1,6 +1,7 @@
 import { getCloudModeLabel, getAppDiagnostics } from "../diagnostics.js";
 import { computeCoachRecommendations, getWeightEvolution } from "../recommendations.js";
 import { state } from "../state.js";
+import { APP_VERSION } from "../version.js";
 import { computeDashboardStats } from "../workout.js";
 import { escapeHtml, formatDateTime } from "../utils.js";
 
@@ -352,6 +353,10 @@ function renderAppTab(diagnostics, stats, recommendations) {
           <div class="summary-chip summary-chip-green">
             <span class="summary-label">Streak</span>
             <strong>${stats.streak} jours</strong>
+          </div>
+          <div class="summary-chip">
+            <span class="summary-label">Build</span>
+            <strong>${escapeHtml(APP_VERSION)}</strong>
           </div>
         </div>
       </div>

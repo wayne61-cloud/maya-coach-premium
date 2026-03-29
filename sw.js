@@ -1,9 +1,11 @@
-const CACHE_NAME = "maya-coach-shell-v2";
+const CACHE_NAME = "maya-coach-shell-v3-20260329-1";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css",
-  "./manifest.webmanifest"
+  "./index.html?v=20260329-1",
+  "./styles.css?v=20260329-1",
+  "./manifest.webmanifest?v=20260329-1",
+  "./js/main.js?v=20260329-1"
 ];
 
 function isSameOrigin(request) {
@@ -50,6 +52,12 @@ self.addEventListener("activate", (event) => {
     caches.keys().then((keys) => Promise.all(keys.map((key) => (key !== CACHE_NAME ? caches.delete(key) : null))))
   );
   self.clients.claim();
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("fetch", (event) => {

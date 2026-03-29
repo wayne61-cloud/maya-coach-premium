@@ -1,5 +1,6 @@
 import { persistNotificationConfig, state } from "./state.js";
 import { getTopRecommendation } from "./recommendations.js";
+import { APP_ASSET_VERSION } from "./version.js";
 
 function getNotificationPermission() {
   if (typeof Notification === "undefined") return "unsupported";
@@ -20,8 +21,23 @@ export async function registerServiceWorker() {
     return { ok: false, reason: "unsupported" };
   }
   try {
-    const registration = await navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" });
+    const registration = await navigator.serviceWorker.register(`./sw.js?v=${APP_ASSET_VERSION}`, { updateViaCache: "none" });
     await registration.update().catch(() => {});
+
+    if (registration.waiting) {
+      registration.waiting.postMessage({ type: "SKIP_WAITING" });
+    }
+
+    registration.addEventListener("updatefound", () => {
+      const installing = registration.installing;
+      if (!installing) return;
+      installing.addEventListener("statechange", () => {
+        if (installing.state === "installed" && navigator.serviceWorker.controller) {
+          registration.waiting?.postMessage({ type: "SKIP_WAITING" });
+        }
+      });
+    });
+
     state.notificationConfig = {
       ...(state.notificationConfig || {}),
       serviceWorkerReady: true

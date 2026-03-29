@@ -7,6 +7,7 @@ import { goToPage, initRouter, refreshCurrentPage } from "./router.js";
 import { computeCoachRecommendations } from "./recommendations.js";
 import { pullSyncSnapshot, pushSyncSnapshot, requestMagicLink, scheduleAutoSync, updateSyncConfig } from "./sync.js";
 import { defaultProfile, persistFavorites, state, updateProfile } from "./state.js";
+import { APP_VERSION } from "./version.js";
 import { applyFeedback, buildAdjustedPlan, buildMinimalPlanAroundExercise, createProtocolHistoryEntry, finishWorkout, historyEntryToPlan, startPlan, workoutDoneAction, workoutModifyAction, workoutSkipAction } from "./workout.js";
 
 function showToast(message) {
@@ -26,6 +27,12 @@ function updateClock() {
 function syncViewportHeight() {
   const viewportHeight = window.visualViewport?.height || window.innerHeight;
   document.documentElement.style.setProperty("--app-height", `${Math.round(viewportHeight)}px`);
+}
+
+function syncBuildLabel() {
+  document.querySelectorAll("[data-build-label]").forEach((node) => {
+    node.textContent = APP_VERSION;
+  });
 }
 
 function toggleFavorite(type, id) {
@@ -588,6 +595,7 @@ function bindEvents() {
 
 function init() {
   syncViewportHeight();
+  syncBuildLabel();
   updateClock();
   setInterval(updateClock, 15000);
   refreshNotificationPermission();
@@ -595,6 +603,12 @@ function init() {
   registerServiceWorker().catch(() => {});
   startNotificationPulse();
   if (typeof window !== "undefined") {
+    let reloadedForController = false;
+    navigator.serviceWorker?.addEventListener?.("controllerchange", () => {
+      if (reloadedForController) return;
+      reloadedForController = true;
+      window.location.reload();
+    });
     window.addEventListener("resize", syncViewportHeight);
     window.visualViewport?.addEventListener("resize", syncViewportHeight);
     window.addEventListener("online", refreshCurrentPage);
