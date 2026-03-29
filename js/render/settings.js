@@ -32,121 +32,133 @@ function renderProfileTab(profile, weightEvolution) {
     <div class="card settings-section module-settings surface-settings">
       <div class="settings-section-head">
         <div>
-          <div class="eyebrow">Page profil</div>
+          <div class="eyebrow">Profil</div>
           <h3>Profil athlète</h3>
-          <p class="muted">Un cockpit plus rationnel: identité, préférences d’entraînement et poids suivi au même endroit.</p>
+          <p class="muted">Panneaux pliables, saisie plus dense et lecture rapide sur iPhone.</p>
         </div>
         <span class="pill pill-alert">${escapeHtml(weightEvolution.currentWeightKg ? `${weightEvolution.currentWeightKg} kg` : "à compléter")}</span>
       </div>
 
-      <div class="profile-hero">
-        <div class="profile-avatar-shell">
-          ${photoUrl
-            ? `<img class="profile-avatar-image" src="${photoUrl}" alt="Photo de profil" />`
-            : `<span class="profile-avatar-fallback">${escapeHtml(initials)}</span>`}
-        </div>
-        <div class="profile-hero-copy">
-          <div class="settings-subtitle">Photo de profil</div>
-          <p class="muted">Ajoute une photo carrée pour personnaliser le profil athlète dans l’app.</p>
-          <div class="profile-photo-actions">
-            <label class="btn btn-soft file-trigger">
-              <input id="profilePhotoInput" type="file" accept="image/*" hidden />
-              ${photoUrl ? "Changer la photo" : "Ajouter une photo"}
-            </label>
-            <button class="btn btn-outline" data-action="remove-profile-photo" ${photoUrl ? "" : "disabled"}>Retirer</button>
+      <div class="profile-folds">
+        <details class="profile-fold" open>
+          <summary>
+            <span class="profile-fold-head">
+              <strong>Photo</strong>
+              <small>Avatar et identité visuelle</small>
+            </span>
+            <span class="profile-fold-meta">${photoUrl ? "photo active" : "ajouter"}</span>
+          </summary>
+          <div class="profile-photo-row">
+            <div class="profile-avatar-shell compact-avatar-upload">
+              ${photoUrl
+                ? `<img class="profile-avatar-image" src="${photoUrl}" alt="Photo de profil" />`
+                : `<span class="profile-avatar-fallback">${escapeHtml(initials)}</span>`}
+            </div>
+            <div class="profile-hero-copy">
+              <p class="muted">Ajoute une photo carrée pour personnaliser le profil dans les écrans Accueil et Profil.</p>
+              <div class="profile-photo-actions">
+                <label class="btn btn-soft file-trigger">
+                  <input id="profilePhotoInput" type="file" accept="image/*" hidden />
+                  ${photoUrl ? "Changer" : "Ajouter"}
+                </label>
+                <button class="btn btn-outline" data-action="remove-profile-photo" ${photoUrl ? "" : "disabled"}>Retirer</button>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        </details>
 
-      <div class="settings-subsection">
-        <div class="settings-subsection-head">
-          <div>
-            <div class="settings-subtitle">Compte</div>
-            <p class="muted">Les infos de base qui servent au coaching et au suivi d’évolution.</p>
-          </div>
-        </div>
-        <div class="settings-grid">
-          <div class="field-stack">
-            <label class="field-label" for="profileName">Nom</label>
-            <div class="field-shell surface-form">
-              <span class="field-prefix">Identité</span>
-              <input id="profileName" type="text" placeholder="Ton prénom" value="${escapeHtml(profile.name || "")}" />
+        <details class="profile-fold" open>
+          <summary>
+            <span class="profile-fold-head">
+              <strong>Compte</strong>
+              <small>Nom, âge, poids</small>
+            </span>
+            <span class="profile-fold-meta">${escapeHtml(summaryLine(profile) || "incomplet")}</span>
+          </summary>
+          <div class="settings-grid compact-grid">
+            <div class="field-stack full-span">
+              <label class="field-label" for="profileName">Nom</label>
+              <div class="field-shell surface-form">
+                <span class="field-prefix">Identité</span>
+                <input id="profileName" type="text" placeholder="Ton prénom" value="${escapeHtml(profile.name || "")}" />
+              </div>
+            </div>
+            <div class="field-stack">
+              <label class="field-label" for="profileAge">Âge</label>
+              <div class="field-shell surface-form">
+                <span class="field-prefix">Ans</span>
+                <input id="profileAge" type="number" min="10" max="99" placeholder="29" value="${escapeHtml(profile.age || "")}" />
+              </div>
+            </div>
+            <div class="field-stack">
+              <label class="field-label" for="profileWeight">Poids</label>
+              <div class="field-shell surface-form">
+                <span class="field-prefix">Kg</span>
+                <input id="profileWeight" type="number" min="35" max="220" step="0.1" placeholder="74" value="${escapeHtml(profile.weightKg || "")}" />
+              </div>
             </div>
           </div>
-          <div class="field-stack">
-            <label class="field-label" for="profileAge">Âge</label>
-            <div class="field-shell surface-form">
-              <span class="field-prefix">Ans</span>
-              <input id="profileAge" type="number" min="10" max="99" placeholder="29" value="${escapeHtml(profile.age || "")}" />
-            </div>
-          </div>
-          <div class="field-stack full-span">
-            <label class="field-label" for="profileWeight">Poids</label>
-            <div class="field-shell surface-form">
-              <span class="field-prefix">Kg</span>
-              <input id="profileWeight" type="number" min="35" max="220" step="0.1" placeholder="74" value="${escapeHtml(profile.weightKg || "")}" />
-            </div>
-          </div>
-        </div>
-      </div>
+        </details>
 
-      <div class="settings-subsection">
-        <div class="settings-subsection-head">
-          <div>
-            <div class="settings-subtitle">Préférences d'entraînement</div>
-            <p class="muted">Ces choix guident l’IA, la densité des séances et la logique du cycle.</p>
-          </div>
-        </div>
-        <div class="settings-grid">
-          <div class="field-stack">
-            <label class="field-label" for="profileGoal">Objectif</label>
-            <div class="field-shell surface-form">
-              <select id="profileGoal">
-                ${["muscle", "force", "seche", "maintenance"].map((goal) => `<option value="${goal}" ${(profile.goal || "muscle") === goal ? "selected" : ""}>${escapeHtml(goal)}</option>`).join("")}
-              </select>
+        <details class="profile-fold">
+          <summary>
+            <span class="profile-fold-head">
+              <strong>Préférences séance</strong>
+              <small>Objectif, niveau, fréquence</small>
+            </span>
+            <span class="profile-fold-meta">${escapeHtml(profile.goal || "muscle")} • ${escapeHtml(profile.sessionTime || "35")} min</span>
+          </summary>
+          <div class="settings-grid compact-grid">
+            <div class="field-stack">
+              <label class="field-label" for="profileGoal">Objectif</label>
+              <div class="field-shell surface-form">
+                <select id="profileGoal">
+                  ${["muscle", "force", "seche", "maintenance"].map((goal) => `<option value="${goal}" ${(profile.goal || "muscle") === goal ? "selected" : ""}>${escapeHtml(goal)}</option>`).join("")}
+                </select>
+              </div>
+            </div>
+            <div class="field-stack">
+              <label class="field-label" for="profileLevel">Niveau</label>
+              <div class="field-shell surface-form">
+                <select id="profileLevel">
+                  <option value="1" ${(profile.level || "2") === "1" ? "selected" : ""}>Débutant</option>
+                  <option value="2" ${(profile.level || "2") === "2" ? "selected" : ""}>Intermédiaire</option>
+                  <option value="3" ${(profile.level || "2") === "3" ? "selected" : ""}>Avancé</option>
+                </select>
+              </div>
+            </div>
+            <div class="field-stack">
+              <label class="field-label" for="profileFrequency">Fréquence</label>
+              <div class="field-shell surface-form">
+                <select id="profileFrequency">
+                  ${["2", "3", "4"].map((value) => `<option value="${value}" ${(profile.frequency || "3") === value ? "selected" : ""}>${escapeHtml(value)} séances</option>`).join("")}
+                </select>
+              </div>
+            </div>
+            <div class="field-stack">
+              <label class="field-label" for="profilePlace">Lieu</label>
+              <div class="field-shell surface-form">
+                <select id="profilePlace">
+                  ${["maison", "salle", "mixte"].map((value) => `<option value="${value}" ${(profile.place || "mixte") === value ? "selected" : ""}>${escapeHtml(value)}</option>`).join("")}
+                </select>
+              </div>
+            </div>
+            <div class="field-stack full-span">
+              <label class="field-label" for="profileSessionTime">Durée cible</label>
+              <div class="field-shell surface-form">
+                <select id="profileSessionTime">
+                  ${["20", "35", "45", "60"].map((value) => `<option value="${value}" ${(profile.sessionTime || "35") === value ? "selected" : ""}>${escapeHtml(value)} min</option>`).join("")}
+                </select>
+              </div>
             </div>
           </div>
-          <div class="field-stack">
-            <label class="field-label" for="profileLevel">Niveau</label>
-            <div class="field-shell surface-form">
-              <select id="profileLevel">
-                <option value="1" ${(profile.level || "2") === "1" ? "selected" : ""}>Débutant</option>
-                <option value="2" ${(profile.level || "2") === "2" ? "selected" : ""}>Intermédiaire</option>
-                <option value="3" ${(profile.level || "2") === "3" ? "selected" : ""}>Avancé</option>
-              </select>
-            </div>
-          </div>
-          <div class="field-stack">
-            <label class="field-label" for="profileFrequency">Fréquence</label>
-            <div class="field-shell surface-form">
-              <select id="profileFrequency">
-                ${["2", "3", "4"].map((value) => `<option value="${value}" ${(profile.frequency || "3") === value ? "selected" : ""}>${escapeHtml(value)} séances</option>`).join("")}
-              </select>
-            </div>
-          </div>
-          <div class="field-stack">
-            <label class="field-label" for="profilePlace">Lieu principal</label>
-            <div class="field-shell surface-form">
-              <select id="profilePlace">
-                ${["maison", "salle", "mixte"].map((value) => `<option value="${value}" ${(profile.place || "mixte") === value ? "selected" : ""}>${escapeHtml(value)}</option>`).join("")}
-              </select>
-            </div>
-          </div>
-          <div class="field-stack">
-            <label class="field-label" for="profileSessionTime">Durée cible</label>
-            <div class="field-shell surface-form">
-              <select id="profileSessionTime">
-                ${["20", "35", "45", "60"].map((value) => `<option value="${value}" ${(profile.sessionTime || "35") === value ? "selected" : ""}>${escapeHtml(value)} min</option>`).join("")}
-              </select>
-            </div>
-          </div>
-        </div>
+        </details>
       </div>
 
       <div class="helper-note info-note">${escapeHtml(weightEvolution.label)}</div>
-      <div class="actions-row two">
-        <button class="btn btn-main" data-action="save-profile">Enregistrer le profil</button>
-        <button class="btn btn-outline" data-action="open-onboarding">Refaire l’onboarding</button>
+      <div class="actions-row profile-actions">
+        <button class="btn btn-main" data-action="save-profile">Enregistrer</button>
+        <button class="btn btn-outline btn-inline" data-action="open-onboarding">Onboarding</button>
       </div>
     </div>
   `;
@@ -444,7 +456,7 @@ export function renderSettings(node) {
             </div>
             <div class="settings-identity-copy">
               <h2>Paramètres, profil et pilotage</h2>
-              <p class="muted">Un cockpit plus net: identité athlète, IA, sync et diagnostic sans bruit décoratif.</p>
+              <p class="muted">Version iPhone compacte: profil, IA, sync et app dans un cockpit plus dense.</p>
               <div class="hero-chips">
                 <span class="pill">${escapeHtml(summaryLine(profile) || "Profil à compléter")}</span>
                 <span class="pill">${escapeHtml(weightEvolution.currentWeightKg ? `${weightEvolution.currentWeightKg} kg` : "poids non suivi")}</span>

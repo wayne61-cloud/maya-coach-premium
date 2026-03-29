@@ -28,11 +28,11 @@ const renderers = {
 
 const PAGE_LABELS = {
   home: "Accueil",
-  ia: "Coach IA",
+  ia: "Coach",
   workout: "Séance",
   exos: "Bibliothèque",
   nutrition: "Nutrition",
-  history: "Progression",
+  history: "Suivi",
   stats: "Stats",
   favoris: "Favoris",
   noushi: "NOUSHI",

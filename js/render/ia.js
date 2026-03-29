@@ -1,48 +1,66 @@
-import { EXO_BY_ID } from "../catalog.js";
 import { getCycleHeadline } from "../ai.js";
+import { EXO_BY_ID } from "../catalog.js";
 import { getAppDiagnostics } from "../diagnostics.js";
 import { state } from "../state.js";
 import { buildEmptyState, escapeHtml, formatDateTime } from "../utils.js";
 
 function renderPlan(plan) {
   if (!plan) {
-    return buildEmptyState("Aucune séance générée", "Génère une séance IA ou lance un focus à partir d'un exercice.", "", "");
+    return buildEmptyState("Aucune séance prête", "Renseigne le brief puis génère une séance pour voir l’aperçu coach.", "", "");
   }
 
-  const blocksHtml = plan.blocks.map((block, index) => {
-    const exercise = EXO_BY_ID.get(block.exerciseId);
-    return `
-      <div class="plan-block">
-        <div class="plan-title">Bloc ${String.fromCharCode(65 + index)} • ${escapeHtml(exercise?.nom || block.exerciseId)}</div>
-        <div class="muted">${block.sets} séries • ${escapeHtml(block.reps)} • repos ${block.restSec}s • tempo ${escapeHtml(block.tempo)}</div>
-        <div class="muted">${escapeHtml(exercise?.muscle || "")} • ${escapeHtml(exercise?.equipement || "")}</div>
-      </div>
-    `;
-  }).join("");
-
   return `
-    <div class="plan-block">
-      <div class="plan-title">${escapeHtml(plan.title)}</div>
-      <div class="muted">Durée estimée: ${plan.estimatedDurationMin} min • Source: ${escapeHtml(state.aiRuntime.source || "local")} • ${escapeHtml(getCycleHeadline())}</div>
-      ${state.aiRuntime.error ? `<div class="muted">Fallback local: ${escapeHtml(state.aiRuntime.error)}</div>` : ""}
-    </div>
-    <div class="plan-block">
-      <div class="plan-title">Cohérence coach</div>
-      <div class="muted">Score ${plan.metadata?.coherenceScore || 0}/100 • Pattern dominant ${escapeHtml(plan.metadata?.dominantPattern || "mixte")} • Fatigue ${plan.metadata?.fatigueLoad || 0}/100</div>
-      <div class="muted">${(plan.metadata?.justification || []).map((item) => `• ${escapeHtml(item)}`).join("<br>")}</div>
-    </div>
-    <div class="plan-block">
-      <div class="plan-title">Échauffement</div>
-      <div class="muted">${plan.warmup.map((item) => `• ${escapeHtml(item)}`).join("<br>")}</div>
-    </div>
-    ${blocksHtml}
-    <div class="plan-block">
-      <div class="plan-title">Finisher</div>
-      <div class="muted">${escapeHtml(plan.finisher)}</div>
-    </div>
-    <div class="plan-block">
-      <div class="plan-title">Logique IA</div>
-      <div class="muted">${plan.coachReasoning.map((item) => `• ${escapeHtml(item)}`).join("<br>")}</div>
+    <div class="compact-plan-card">
+      <div class="row-card-head">
+        <div>
+          <div class="eyebrow">Plan généré</div>
+          <div class="row-card-title">${escapeHtml(plan.title)}</div>
+        </div>
+        <span class="pill pill-calm">${plan.estimatedDurationMin} min</span>
+      </div>
+
+      <div class="mini-kpi-row">
+        <div class="mini-kpi-card accent-gold">
+          <span class="mini-kpi-label">Score</span>
+          <strong class="mini-kpi-value">${plan.metadata?.coherenceScore || 0}</strong>
+          <span class="mini-kpi-meta">cohérence</span>
+        </div>
+        <div class="mini-kpi-card accent-blue">
+          <span class="mini-kpi-label">Pattern</span>
+          <strong class="mini-kpi-value mini-kpi-text">${escapeHtml(plan.metadata?.dominantPattern || "mixte")}</strong>
+          <span class="mini-kpi-meta">dominant</span>
+        </div>
+        <div class="mini-kpi-card accent-coral">
+          <span class="mini-kpi-label">Fatigue</span>
+          <strong class="mini-kpi-value">${plan.metadata?.fatigueLoad || 0}</strong>
+          <span class="mini-kpi-meta">sur 100</span>
+        </div>
+      </div>
+
+      <div class="compact-plan-list">
+        ${plan.blocks.map((block, index) => {
+          const exercise = EXO_BY_ID.get(block.exerciseId);
+          return `
+            <div class="plan-row">
+              <div class="plan-row-main">
+                <strong>${String.fromCharCode(65 + index)}. ${escapeHtml(exercise?.nom || block.exerciseId)}</strong>
+                <span>${block.sets} séries • ${escapeHtml(block.reps)}</span>
+              </div>
+              <div class="plan-row-meta">${block.restSec}s repos • ${escapeHtml(block.tempo)}</div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+
+      <details class="compact-details">
+        <summary>Échauffement et logique IA</summary>
+        <div class="coach-grid">
+          <div><strong>Échauffement</strong><br>${plan.warmup.map((item) => `• ${escapeHtml(item)}`).join("<br>")}</div>
+          <div><strong>Coach</strong><br>${plan.coachReasoning.map((item) => `• ${escapeHtml(item)}`).join("<br>")}</div>
+          <div><strong>Justification</strong><br>${(plan.metadata?.justification || []).map((item) => `• ${escapeHtml(item)}`).join("<br>") || "Aucune"}</div>
+          <div><strong>Finisher</strong><br>${escapeHtml(plan.finisher)}</div>
+        </div>
+      </details>
     </div>
   `;
 }
@@ -56,55 +74,56 @@ export function renderIA(node) {
   const athleteIdentity = [profile.name, profile.age ? `${profile.age} ans` : "", profile.weightKg ? `${profile.weightKg} kg` : ""].filter(Boolean).join(" • ");
 
   node.innerHTML = `
-    <div class="section">
-      <div class="card module-coach glow-gold">
-        <h2>Coach IA premium</h2>
-        <p class="muted">Page de travail IA: génération de séance, contrôle de l’énergie, exercice focus et explication du plan. Les paramètres techniques sont maintenant dans l’onglet Paramètres.</p>
+    <div class="section compact-shell">
+      <div class="card module-coach glow-gold compact-coach-shell">
+        <div class="row-card-head">
+          <div>
+            <div class="eyebrow">Coach</div>
+            <h2>Brief séance</h2>
+            <p class="muted">Un seul formulaire compact, une seule action principale, puis un aperçu clair du plan.</p>
+          </div>
+          <span class="pill">${escapeHtml(state.aiRuntime.source || state.aiConfig.mode)}</span>
+        </div>
 
-        <div class="settings-summary-grid" style="margin-top: 10px;">
-          <div class="summary-chip">
-            <span class="summary-label">Profil</span>
-            <strong>${escapeHtml(athleteIdentity || "À compléter")}</strong>
+        <div class="mini-kpi-row">
+          <div class="mini-kpi-card accent-gold">
+            <span class="mini-kpi-label">Profil</span>
+            <strong class="mini-kpi-value mini-kpi-text">${escapeHtml(athleteIdentity || "à compléter")}</strong>
+            <span class="mini-kpi-meta">personnalisation</span>
           </div>
-          <div class="summary-chip">
-            <span class="summary-label">Source IA</span>
-            <strong>${escapeHtml(state.aiRuntime.source || state.aiConfig.mode)}</strong>
+          <div class="mini-kpi-card accent-blue">
+            <span class="mini-kpi-label">Cycle</span>
+            <strong class="mini-kpi-value mini-kpi-text">${escapeHtml(getCycleHeadline())}</strong>
+            <span class="mini-kpi-meta">bloc actuel</span>
           </div>
-          <div class="summary-chip">
-            <span class="summary-label">Cycle</span>
-            <strong>${escapeHtml(getCycleHeadline())}</strong>
+          <div class="mini-kpi-card accent-coral">
+            <span class="mini-kpi-label">Source</span>
+            <strong class="mini-kpi-value mini-kpi-text">${escapeHtml(state.aiRuntime.status || "idle")}</strong>
+            <span class="mini-kpi-meta">${state.aiRuntime.latencyMs || 0} ms</span>
           </div>
         </div>
 
-        <div class="search-module" style="margin-top: 12px;">
-          <div class="search-module-head">
-            <div>
-              <h3>Brief séance</h3>
-              <p class="muted">Formulaire repensé en mode mobile: lisible, compact et centré sur les variables qui changent la séance.</p>
-            </div>
-          </div>
-
-          <div class="settings-grid compact-grid">
-          <div class="field-group">
-            <label class="field-label" for="iaTime">Temps disponible</label>
-            <div class="field-shell">
+        <div class="settings-grid compact-grid compact-form-grid">
+          <div class="field-stack">
+            <label class="field-label" for="iaTime">Temps</label>
+            <div class="field-shell surface-form">
               <select id="iaTime">
                 ${[20, 25, 35, 45, 60].map((value) => `<option value="${value}" ${String(value) === String(draft.time || profile.sessionTime || 35) ? "selected" : ""}>${value} min</option>`).join("")}
               </select>
             </div>
           </div>
-          <div class="field-group">
+          <div class="field-stack">
             <label class="field-label" for="iaPlace">Lieu</label>
-            <div class="field-shell">
+            <div class="field-shell surface-form">
               <select id="iaPlace">
                 <option value="maison" ${(draft.place || profile.place || "maison") === "maison" ? "selected" : ""}>Maison</option>
                 <option value="salle" ${(draft.place || profile.place || "maison") === "salle" ? "selected" : ""}>Salle</option>
               </select>
             </div>
           </div>
-          <div class="field-group">
+          <div class="field-stack">
             <label class="field-label" for="iaZone">Zone</label>
-            <div class="field-shell">
+            <div class="field-shell surface-form">
               <select id="iaZone">
                 <option value="haut" ${(draft.zone || "full") === "haut" ? "selected" : ""}>Haut</option>
                 <option value="bas" ${(draft.zone || "full") === "bas" ? "selected" : ""}>Bas</option>
@@ -113,9 +132,9 @@ export function renderIA(node) {
               </select>
             </div>
           </div>
-          <div class="field-group">
+          <div class="field-stack">
             <label class="field-label" for="iaEnergy">Énergie</label>
-            <div class="field-shell">
+            <div class="field-shell surface-form">
               <select id="iaEnergy">
                 <option value="fatigue" ${(draft.energy || "normal") === "fatigue" ? "selected" : ""}>Fatigué</option>
                 <option value="normal" ${(draft.energy || "normal") === "normal" ? "selected" : ""}>Normal</option>
@@ -123,17 +142,17 @@ export function renderIA(node) {
               </select>
             </div>
           </div>
-          <div class="field-group">
+          <div class="field-stack">
             <label class="field-label" for="iaGoal">Objectif</label>
-            <div class="field-shell">
+            <div class="field-shell surface-form">
               <select id="iaGoal">
                 ${["muscle", "force", "endurance", "seche"].map((goal) => `<option value="${goal}" ${(draft.goal || profile.goal || "muscle") === goal ? "selected" : ""}>${escapeHtml(goal)}</option>`).join("")}
               </select>
             </div>
           </div>
-          <div class="field-group">
+          <div class="field-stack">
             <label class="field-label" for="iaLevel">Niveau</label>
-            <div class="field-shell">
+            <div class="field-shell surface-form">
               <select id="iaLevel">
                 <option value="1" ${(draft.level || profile.level || "2") === "1" ? "selected" : ""}>Débutant</option>
                 <option value="2" ${(draft.level || profile.level || "2") === "2" ? "selected" : ""}>Intermédiaire</option>
@@ -142,35 +161,32 @@ export function renderIA(node) {
             </div>
           </div>
         </div>
+
+        <div class="helper-note calm-note">
+          Focus ${escapeHtml(preferredExerciseName || "aucun")} • profil ${escapeHtml(athleteIdentity || "incomplet")} • web ${state.aiConfig.webSearch ? "activé" : "désactivé"}
+          <br />
+          Dernier check ${state.aiRuntime.lastCheckedAt ? escapeHtml(formatDateTime(state.aiRuntime.lastCheckedAt)) : "jamais"}
+          ${state.aiRuntime.error ? `• ${escapeHtml(state.aiRuntime.error)}` : ""}
         </div>
 
-        <div class="plan-block">
-          <div class="plan-title">${escapeHtml(getCycleHeadline())}</div>
-          <div class="muted">Exercice focus: ${escapeHtml(preferredExerciseName || "aucun")} • Entrée historique: ${escapeHtml(draft.previousEntryId || "aucune")}</div>
-          <div class="muted">Profil utilisé: ${escapeHtml(athleteIdentity || "nom, âge et poids non complets")}</div>
-        </div>
-
-        <div class="actions-row two">
-          <button class="btn btn-main" data-action="generate-plan">Générer la séance IA</button>
-          <button class="btn btn-soft" data-action="start-generated-plan" ${currentPlan ? "" : "disabled"}>Démarrer la séance</button>
-        </div>
-        <div class="ia-source-status" id="iaSourceStatus" style="margin-top: 10px;">
-          <strong>Source IA:</strong> ${escapeHtml(state.aiRuntime.source || state.aiConfig.mode)} • statut ${escapeHtml(state.aiRuntime.status || "idle")} • latence ${state.aiRuntime.latencyMs || 0} ms
-          <br />
-          <strong>Dernier test:</strong> ${state.aiRuntime.lastCheckedAt ? escapeHtml(formatDateTime(state.aiRuntime.lastCheckedAt)) : "jamais"} • web ${state.aiConfig.webSearch ? "activé" : "désactivé"}
-          <br />
-          <strong>Réglages avancés:</strong> disponibles dans l’onglet Paramètres
-        </div>
         ${diagnostics.proxyPublicBlocked ? `
-          <div class="helper-note alert-note" style="margin-top: 10px;">
-            Ici, le proxy sécurisé pointe encore vers <strong>localhost</strong>. Sur l’app publique, l’IA utilisera donc le moteur local tant qu’aucun proxy public n’est branché.
+          <div class="helper-note alert-note">
+            Le mode Internet sécurisé pointe encore vers <strong>localhost</strong>. L’app publique reste donc en local tant qu’un proxy public n’est pas branché.
           </div>
         ` : ""}
+
+        <button class="btn btn-main compact-primary-btn" data-action="generate-plan">Générer ma séance</button>
       </div>
 
       <div class="card module-coach">
-        <h3>Plan généré</h3>
-        <div class="section">${renderPlan(currentPlan)}</div>
+        <div class="row-card-head">
+          <div>
+            <div class="eyebrow">Aperçu</div>
+            <h3>Plan du coach</h3>
+          </div>
+          <button class="btn btn-soft btn-inline" data-action="start-generated-plan" ${currentPlan ? "" : "disabled"}>Démarrer</button>
+        </div>
+        ${renderPlan(currentPlan)}
       </div>
     </div>
   `;
