@@ -1,5 +1,8 @@
 import {
+  getManagedBackendProductConfig,
   getAdminEmails,
+  hasCloudProductConfig,
+  hasManagedBackendProductConfig,
   getSupabaseProductConfig,
   hasSupabaseProductConfig,
   isPreviewAuthEnabled
@@ -12,6 +15,7 @@ import {
   saveJSON
 } from "./storage.js";
 import {
+  persistAIConfig,
   defaultCustomWorkoutDraft,
   defaultProfile,
   persistAuthState,
@@ -20,17 +24,24 @@ import {
   persistFavorites,
   persistFeedbackTrend,
   persistHistory,
+  persistNotificationConfig,
   persistNutritionHistory,
   persistNutritionProfile,
   persistProfile,
   persistProfileSnapshots,
   persistSupabaseConfig,
+  persistSyncConfig,
   persistVisualProgressEntries,
   resetPhotoProgressDraft,
   setCustomWorkoutLibraryState,
+  sanitizeAIConfig,
   sanitizeAuthState,
+  sanitizeCustomWorkoutDraft,
+  sanitizeNotificationConfig,
   sanitizeProfile,
   sanitizeSupabaseConfig,
+  sanitizeSyncConfig,
+  sanitizeVisualProgressEntry,
   state
 } from "./state.js";
 import { dayKey } from "./utils.js";
@@ -46,8 +57,22 @@ function isConfiguredAdminEmail(email) {
   return getAdminEmails().map((item) => String(item || "").trim().toLowerCase()).includes(safeEmail);
 }
 
+function getCloudMode() {
+  if (hasSupabaseProductConfig()) return "supabase";
+  if (hasManagedBackendProductConfig()) return "backend";
+  return "preview";
+}
+
+function isManagedBackendMode() {
+  return !hasSupabaseProductConfig() && hasManagedBackendProductConfig();
+}
+
 function publicSupabaseState(partialConfig = {}) {
-  const productConfig = getSupabaseProductConfig();
+  const productConfig = hasSupabaseProductConfig()
+    ? getSupabaseProductConfig()
+    : hasManagedBackendProductConfig()
+      ? getManagedBackendProductConfig()
+      : { enabled: false };
   state.supabaseConfig = sanitizeSupabaseConfig({
     ...(state.supabaseConfig || {}),
     enabled: Boolean(productConfig.enabled),
@@ -78,8 +103,78 @@ function profileFromUser(user) {
     id: user?.id || "",
     email: user?.email || "",
     displayName,
-    mode: hasSupabaseProductConfig() ? "supabase" : "preview"
+    mode: getCloudMode()
   };
+}
+
+function normalizeBackendUser(payload = {}) {
+  return {
+    id: payload.id || "",
+    email: payload.email || "",
+    user_metadata: {
+      display_name: payload.displayName || payload.name || ""
+    }
+  };
+}
+
+function ensureManagedBackendSyncConfig(
+  token = state.syncConfig?.token || "",
+  email = state.currentUser?.email || state.syncConfig?.email || ""
+) {
+  if (!hasManagedBackendProductConfig()) return state.syncConfig;
+  const config = getManagedBackendProductConfig();
+  state.syncConfig = sanitizeSyncConfig({
+    ...(state.syncConfig || {}),
+    endpoint: config.url,
+    token,
+    email,
+    autoSync: true
+  });
+  persistSyncConfig();
+  return state.syncConfig;
+}
+
+function clearManagedBackendSession() {
+  if (!hasManagedBackendProductConfig()) return;
+  state.syncConfig = sanitizeSyncConfig({
+    ...(state.syncConfig || {}),
+    endpoint: getManagedBackendProductConfig().url,
+    token: ""
+  });
+  persistSyncConfig();
+}
+
+async function backendRequest(path, { method = "GET", body, auth = true } = {}) {
+  if (!hasManagedBackendProductConfig()) {
+    throw new Error("Backend managé non configuré");
+  }
+
+  ensureManagedBackendSyncConfig();
+  const baseUrl = getManagedBackendProductConfig().url.replace(/\/$/, "");
+  const headers = {
+    "Content-Type": "application/json"
+  };
+
+  if (auth && state.syncConfig?.token) {
+    headers.Authorization = `Bearer ${state.syncConfig.token}`;
+  }
+
+  const response = await fetch(`${baseUrl}${path}`, {
+    method,
+    headers,
+    body: body == null ? undefined : JSON.stringify(body)
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = payload?.error || payload?.message || `Backend HTTP ${response.status}`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.payload = payload;
+    throw error;
+  }
+
+  return payload;
 }
 
 function defaultFeedbackTrend() {
@@ -157,6 +252,84 @@ function persistAllUserState() {
   persistCycleState();
   persistCustomWorkoutDraft();
   persistVisualProgressEntries();
+}
+
+function hydrateManagedBackendProfile(remoteProfile = {}, userPayload = {}) {
+  return sanitizeProfile({
+    ...defaultProfile,
+    ...(state.profile || {}),
+    ...(remoteProfile || {}),
+    name: remoteProfile?.name || userPayload.displayName || userPayload.name || state.profile?.name || "",
+    role: userPayload.role || remoteProfile?.role || state.profile?.role || defaultProfile.role,
+    accountStatus: userPayload.accountStatus || remoteProfile?.accountStatus || state.profile?.accountStatus || defaultProfile.accountStatus
+  });
+}
+
+function buildManagedBackendSnapshot() {
+  return {
+    profile: sanitizeProfile(state.profile || defaultProfile),
+    profileSnapshots: Array.isArray(state.profileSnapshots) ? state.profileSnapshots : [],
+    history: Array.isArray(state.history) ? state.history : [],
+    favorites: [...(state.favorites || [])],
+    nutritionProfile: state.nutritionProfile || null,
+    nutritionHistory: Array.isArray(state.nutritionHistory) ? state.nutritionHistory : [],
+    customWorkoutState: {
+      activeId: state.activeCustomWorkoutId,
+      sessions: state.customWorkoutLibrary || []
+    },
+    customWorkoutDraft: state.customWorkoutDraft || null,
+    visualProgressEntries: Array.isArray(state.visualProgressEntries) ? state.visualProgressEntries : [],
+    aiConfig: state.aiConfig || null,
+    notificationConfig: state.notificationConfig || null,
+    feedbackTrend: state.feedbackTrend || defaultFeedbackTrend(),
+    cycleState: state.cycleState || defaultCycleState()
+  };
+}
+
+function restoreManagedBackendSnapshot(remote = {}, userPayload = {}) {
+  state.profile = hydrateManagedBackendProfile(remote.profile || {}, userPayload);
+  state.profileSnapshots = Array.isArray(remote.profileSnapshots) ? remote.profileSnapshots : [];
+  state.history = Array.isArray(remote.history) ? remote.history : [];
+  state.favorites = new Set(Array.isArray(remote.favorites) ? remote.favorites : []);
+  state.nutritionProfile = remote.nutritionProfile ?? null;
+  state.nutritionHistory = Array.isArray(remote.nutritionHistory) ? remote.nutritionHistory : [];
+
+  if (remote.customWorkoutState?.sessions || remote.customWorkoutDraft) {
+    const sessions = Array.isArray(remote.customWorkoutState?.sessions)
+      ? remote.customWorkoutState.sessions.map((session) => sanitizeCustomWorkoutDraft(session))
+      : [sanitizeCustomWorkoutDraft(remote.customWorkoutDraft)];
+    setCustomWorkoutLibraryState({
+      sessions,
+      activeId: remote.customWorkoutState?.activeId || remote.customWorkoutDraft?.id || sessions[0]?.id
+    });
+  }
+
+  state.visualProgressEntries = Array.isArray(remote.visualProgressEntries)
+    ? remote.visualProgressEntries.map((entry) => sanitizeVisualProgressEntry(entry)).filter((entry) => entry.photoDataUrl)
+    : [];
+  state.aiConfig = remote.aiConfig !== undefined ? sanitizeAIConfig(remote.aiConfig) : state.aiConfig;
+  state.notificationConfig = remote.notificationConfig !== undefined ? sanitizeNotificationConfig(remote.notificationConfig) : state.notificationConfig;
+  state.feedbackTrend = remote.feedbackTrend && typeof remote.feedbackTrend === "object"
+    ? remote.feedbackTrend
+    : defaultFeedbackTrend();
+  state.cycleState = remote.cycleState && typeof remote.cycleState === "object"
+    ? remote.cycleState
+    : defaultCycleState();
+  state.showOnboarding = !Boolean(state.profile?.name || state.profile?.weightKg);
+
+  persistProfile();
+  persistProfileSnapshots();
+  persistHistory();
+  persistFavorites();
+  persistNutritionProfile();
+  persistNutritionHistory();
+  persistCustomWorkoutDraft();
+  persistVisualProgressEntries();
+  persistAIConfig();
+  persistNotificationConfig();
+  persistFeedbackTrend();
+  persistCycleState();
+  ensureManagedBackendSyncConfig(state.syncConfig?.token || "", userPayload.email || state.currentUser?.email || state.syncConfig?.email || "");
 }
 
 function loadPreviewUsers() {
@@ -835,6 +1008,42 @@ async function fetchRemoteSnapshot(profileId) {
 }
 
 export async function pullSupabaseSnapshot() {
+  if (isManagedBackendMode()) {
+    try {
+      const remote = await backendRequest("/api/sync/pull");
+      restoreManagedBackendSnapshot(remote, {
+        email: state.currentUser?.email || state.syncConfig?.email || "",
+        displayName: state.currentUser?.displayName || state.profile?.name || "",
+        role: state.profile?.role || defaultProfile.role,
+        accountStatus: state.profile?.accountStatus || defaultProfile.accountStatus
+      });
+      state.syncRuntime = {
+        status: "ready",
+        error: "",
+        lastSyncAt: remote.updatedAt || new Date().toISOString()
+      };
+      setAuthState({
+        status: "ready",
+        mode: "backend",
+        lastSyncAt: state.syncRuntime.lastSyncAt,
+        error: "",
+        notice: ""
+      });
+      return remote;
+    } catch (error) {
+      if (error?.status === 401 || error?.status === 403) {
+        clearManagedBackendSession();
+        resetUserScopedState({ preserveProfileName: state.profile?.name || "" });
+        setSignedOutState({
+          mode: "backend",
+          error: error?.status === 403 ? (error instanceof Error ? error.message : String(error)) : "",
+          notice: error?.status === 401 ? "Session expirée. Reconnecte-toi pour reprendre ton espace." : ""
+        });
+      }
+      throw error;
+    }
+  }
+
   const profileRow = await ensureProfileRow();
   const remote = await fetchRemoteSnapshot(profileRow.id);
   restoreStateFromRemote(remote);
@@ -863,6 +1072,53 @@ async function replaceRows(client, table, rows, filterKey, filterValue) {
 }
 
 export async function pushSupabaseSnapshot() {
+  if (isManagedBackendMode()) {
+    try {
+      const result = await backendRequest("/api/sync/push", {
+        method: "POST",
+        body: buildManagedBackendSnapshot()
+      });
+      if (result?.profile) {
+        state.profile = hydrateManagedBackendProfile(result.profile, {
+          email: state.currentUser?.email || "",
+          displayName: state.currentUser?.displayName || "",
+          role: state.profile?.role || defaultProfile.role,
+          accountStatus: state.profile?.accountStatus || defaultProfile.accountStatus
+        });
+        persistProfile();
+      }
+      state.syncRuntime = {
+        status: "ready",
+        error: "",
+        lastSyncAt: result?.updatedAt || new Date().toISOString()
+      };
+      setAuthState({
+        status: "ready",
+        mode: "backend",
+        lastSyncAt: state.syncRuntime.lastSyncAt,
+        error: "",
+        notice: ""
+      });
+      publicSupabaseState({
+        status: "ready",
+        error: "",
+        lastCheckedAt: new Date().toISOString()
+      });
+      return { synced: true, updatedAt: state.syncRuntime.lastSyncAt };
+    } catch (error) {
+      if (error?.status === 401 || error?.status === 403) {
+        clearManagedBackendSession();
+        resetUserScopedState({ preserveProfileName: state.profile?.name || "" });
+        setSignedOutState({
+          mode: "backend",
+          error: error?.status === 403 ? (error instanceof Error ? error.message : String(error)) : "",
+          notice: error?.status === 401 ? "Session expirée. Reconnecte-toi pour reprendre ton espace." : ""
+        });
+      }
+      throw error;
+    }
+  }
+
   const client = await getSupabaseClient();
   const profileRow = await ensureProfileRow({ syncLocal: true });
   const profileId = profileRow.id;
@@ -1049,7 +1305,7 @@ async function bindSupabaseAuthListener() {
 
 export async function initializeAuth() {
   publicSupabaseState({
-    status: hasSupabaseProductConfig() ? "connecting" : "idle",
+    status: hasCloudProductConfig() ? "connecting" : "idle",
     error: ""
   });
 
@@ -1105,6 +1361,66 @@ export async function initializeAuth() {
         error: message,
         notice: isPreviewAuthEnabled() ? "Flow cloud indisponible, mode local possible." : ""
       });
+    }
+  }
+
+  if (isManagedBackendMode()) {
+    try {
+      ensureManagedBackendSyncConfig(state.syncConfig?.token || "", state.syncConfig?.email || "");
+
+      if (!state.syncConfig?.token) {
+        resetUserScopedState();
+        setSignedOutState({
+          mode: "backend",
+          notice: "Connecte-toi pour ouvrir ton espace."
+        });
+        publicSupabaseState({
+          status: "ready",
+          error: "",
+          lastCheckedAt: new Date().toISOString()
+        });
+        return { ok: false, mode: "backend" };
+      }
+
+      const data = await backendRequest("/api/auth/session");
+      const normalizedUser = normalizeBackendUser(data.user);
+      setAuthenticatedUser({
+        session: data.session || { token: data.sessionToken || state.syncConfig.token },
+        user: normalizedUser,
+        mode: "backend",
+        notice: ""
+      });
+      ensureManagedBackendSyncConfig(
+        data.sessionToken || state.syncConfig.token,
+        data.user?.email || normalizedUser.email
+      );
+      restoreManagedBackendSnapshot(data, data.user || {});
+      publicSupabaseState({
+        status: "ready",
+        error: "",
+        lastCheckedAt: new Date().toISOString()
+      });
+      return { ok: true, mode: "backend" };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const authFailure = error?.status === 401 || error?.status === 403;
+      clearManagedBackendSession();
+      resetUserScopedState();
+      setSignedOutState({
+        mode: "backend",
+        error: error?.status === 403 ? message : "",
+        notice: error?.status === 401
+          ? "Connecte-toi pour ouvrir ton espace."
+          : authFailure
+            ? ""
+            : "Backend temporairement indisponible."
+      });
+      publicSupabaseState({
+        status: authFailure ? "ready" : "error",
+        error: authFailure ? "" : message,
+        lastCheckedAt: new Date().toISOString()
+      });
+      return { ok: false, mode: "backend" };
     }
   }
 
@@ -1172,6 +1488,41 @@ export async function signUpWithPassword({ displayName, email, password }) {
     return data;
   }
 
+  if (isManagedBackendMode()) {
+    const data = await backendRequest("/api/auth/signup", {
+      method: "POST",
+      body: {
+        displayName: safeDisplayName,
+        email: safeEmail,
+        password: safePassword
+      },
+      auth: false
+    });
+
+    if (data.sessionToken && data.user) {
+      const normalizedUser = normalizeBackendUser(data.user);
+      ensureManagedBackendSyncConfig(data.sessionToken, safeEmail);
+      setAuthenticatedUser({
+        session: data.session || { token: data.sessionToken },
+        user: normalizedUser,
+        mode: "backend",
+        notice: ""
+      });
+      state.profile = hydrateManagedBackendProfile(data.profile || {}, data.user || {});
+      persistProfile();
+      await pullSupabaseSnapshot();
+      return data;
+    }
+
+    clearManagedBackendSession();
+    resetUserScopedState({ preserveProfileName: safeDisplayName });
+    setSignedOutState({
+      mode: "backend",
+      notice: data.message || "Compte créé. L’administrateur doit maintenant valider ton accès."
+    });
+    return data;
+  }
+
   if (!isPreviewAuthEnabled()) {
     throw new Error("Aucun provider d’auth disponible");
   }
@@ -1232,6 +1583,29 @@ export async function signInWithPassword({ email, password }) {
     return data;
   }
 
+  if (isManagedBackendMode()) {
+    const data = await backendRequest("/api/auth/signin", {
+      method: "POST",
+      body: {
+        email: safeEmail,
+        password: safePassword
+      },
+      auth: false
+    });
+    const normalizedUser = normalizeBackendUser(data.user);
+    ensureManagedBackendSyncConfig(data.sessionToken || "", safeEmail);
+    setAuthenticatedUser({
+      session: data.session || { token: data.sessionToken || "" },
+      user: normalizedUser,
+      mode: "backend",
+      notice: ""
+    });
+    state.profile = hydrateManagedBackendProfile(data.profile || {}, data.user || {});
+    persistProfile();
+    await pullSupabaseSnapshot();
+    return data;
+  }
+
   const previewUser = findPreviewUserByEmail(safeEmail);
   if (!previewUser || previewUser.password !== safePassword) {
     throw new Error("Identifiants invalides");
@@ -1278,12 +1652,26 @@ export async function signOutCurrentUser() {
     const client = await getSupabaseClient();
     await client.auth.signOut();
   }
+  if (state.authState.mode === "backend" && isManagedBackendMode()) {
+    try {
+      await backendRequest("/api/auth/signout", {
+        method: "POST"
+      });
+    } catch {}
+    clearManagedBackendSession();
+  }
   clearPreviewSession();
   resetUserScopedState();
   setSignedOutState({
-    mode: hasSupabaseProductConfig() ? "supabase" : "preview",
+    mode: hasSupabaseProductConfig()
+      ? "supabase"
+      : isManagedBackendMode()
+        ? "backend"
+        : "preview",
     notice: hasSupabaseProductConfig()
       ? "Déconnecté. Reconnecte-toi pour retrouver ton espace."
+      : isManagedBackendMode()
+        ? "Déconnecté. Reconnecte-toi pour retrouver ton espace."
       : "Session locale fermée."
   });
 }
@@ -1331,6 +1719,34 @@ function normalizeAdminPhotoRow(row) {
 
 export async function refreshAdminDashboard() {
   requireAdminAccess();
+  if (isManagedBackendMode()) {
+    state.adminRuntime = {
+      ...(state.adminRuntime || {}),
+      loading: true,
+      error: ""
+    };
+
+    try {
+      const data = await backendRequest("/api/admin/dashboard");
+      state.adminRuntime = {
+        ...(state.adminRuntime || {}),
+        users: Array.isArray(data.users) ? data.users : [],
+        photos: Array.isArray(data.photos) ? data.photos : [],
+        loading: false,
+        error: "",
+        lastFetchedAt: data.updatedAt || new Date().toISOString()
+      };
+      return state.adminRuntime;
+    } catch (error) {
+      state.adminRuntime = {
+        ...(state.adminRuntime || {}),
+        loading: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+      throw error;
+    }
+  }
+
   const client = await getSupabaseClient();
   state.adminRuntime = {
     ...(state.adminRuntime || {}),
@@ -1396,6 +1812,13 @@ export async function refreshAdminDashboard() {
 
 export async function deleteAdminProgressPhoto(photoId) {
   requireAdminAccess();
+  if (isManagedBackendMode()) {
+    await backendRequest(`/api/admin/photos/${encodeURIComponent(photoId)}`, {
+      method: "DELETE"
+    });
+    return refreshAdminDashboard();
+  }
+
   const client = await getSupabaseClient();
   const { data: row, error: fetchError } = await client
     .from("progress_photos")
@@ -1421,6 +1844,13 @@ export async function deleteAdminProgressPhoto(photoId) {
 
 export async function deleteAdminUserPhotos(profileId) {
   requireAdminAccess();
+  if (isManagedBackendMode()) {
+    await backendRequest(`/api/admin/users/${encodeURIComponent(profileId)}/photos`, {
+      method: "DELETE"
+    });
+    return refreshAdminDashboard();
+  }
+
   const client = await getSupabaseClient();
   const { data: rows, error: fetchError } = await client
     .from("progress_photos")
@@ -1447,6 +1877,19 @@ export async function deleteAdminUserPhotos(profileId) {
 export async function setAdminUserStatus(profileId, status) {
   requireAdminAccess();
   const safeStatus = ["pending", "active", "suspended", "banned"].includes(status) ? status : "active";
+  if (isManagedBackendMode()) {
+    if (state.currentUser?.id === profileId && safeStatus !== "active") {
+      throw new Error("Impossible de désactiver le compte admin connecté.");
+    }
+    await backendRequest(`/api/admin/users/${encodeURIComponent(profileId)}/status`, {
+      method: "PATCH",
+      body: {
+        status: safeStatus
+      }
+    });
+    return refreshAdminDashboard();
+  }
+
   const currentProfileRow = await ensureProfileRow();
   if (currentProfileRow?.id === profileId && safeStatus !== "active") {
     throw new Error("Impossible de désactiver le compte admin connecté.");
@@ -1469,6 +1912,26 @@ export function updateSupabaseConfig(partialConfig) {
 }
 
 export async function testSupabaseConfig() {
+  if (isManagedBackendMode()) {
+    try {
+      const response = await backendRequest("/api/health", { auth: false });
+      publicSupabaseState({
+        status: "ready",
+        error: "",
+        lastCheckedAt: new Date().toISOString()
+      });
+      return { ok: true, provider: "backend", response };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      publicSupabaseState({
+        status: "error",
+        error: message,
+        lastCheckedAt: new Date().toISOString()
+      });
+      return { ok: false, provider: "backend", error: message };
+    }
+  }
+
   if (!hasSupabaseProductConfig()) {
     publicSupabaseState({
       status: "idle",
@@ -1509,5 +1972,5 @@ export async function testSupabaseConfig() {
 }
 
 export function isCloudSessionReady() {
-  return Boolean(state.authState.mode === "supabase" && state.currentUser?.id);
+  return Boolean(["supabase", "backend"].includes(state.authState.mode) && state.currentUser?.id);
 }

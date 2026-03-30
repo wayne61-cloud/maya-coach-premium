@@ -194,8 +194,12 @@ async function handleAuthSubmit() {
       if (payload.password !== String(state.authDraft.confirmPassword || "").trim()) {
         throw new Error("Les mots de passe ne correspondent pas");
       }
-      await signUpWithPassword(payload);
-      showToast(state.currentUser ? "Compte créé" : "Compte créé, vérifie ta boîte mail");
+      const result = await signUpWithPassword(payload);
+      showToast(
+        state.currentUser
+          ? "Compte créé"
+          : (result?.message || "Compte créé, validation admin requise")
+      );
     } else {
       await signInWithPassword(payload);
       showToast("Connexion réussie");
@@ -740,7 +744,11 @@ async function routeAction(action, target) {
     }
     case "test-supabase-config": {
       const result = await testSupabaseConfig();
-      showToast(result.ok ? "Supabase joignable" : (result.error || "Erreur Supabase"));
+      showToast(
+        result.ok
+          ? (result.provider === "backend" ? "Backend joignable" : "Supabase joignable")
+          : (result.error || (result.provider === "backend" ? "Erreur backend" : "Erreur Supabase"))
+      );
       refreshCurrentPage();
       return;
     }

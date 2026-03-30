@@ -1,4 +1,4 @@
-import { hasFlowiseProductConfig, hasSupabaseProductConfig } from "./app-config.js";
+import { hasCloudProductConfig, hasFlowiseProductConfig, hasManagedBackendProductConfig, hasSupabaseProductConfig } from "./app-config.js";
 import { storageAvailable } from "./storage.js";
 import { state } from "./state.js";
 
@@ -34,6 +34,8 @@ export function getAppDiagnostics() {
     proxyPublicBlocked,
     localHost,
     syncConfigured: Boolean(state.syncConfig.endpoint && state.syncConfig.token),
+    cloudAuthConfigured: hasCloudProductConfig(),
+    backendConfigured: hasManagedBackendProductConfig(),
     supabaseConfigured: hasSupabaseProductConfig(),
     flowiseConfigured: hasFlowiseProductConfig(),
     aiMode: state.aiConfig.mode,

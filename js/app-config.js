@@ -25,6 +25,10 @@ const DEFAULT_APP_CONFIG = {
     adminEmails: []
   },
   services: {
+    backend: {
+      enabled: false,
+      url: ""
+    },
     supabase: {
       enabled: true,
       url: "",
@@ -51,9 +55,22 @@ export function getSupabaseProductConfig() {
   return APP_CONFIG.services?.supabase || DEFAULT_APP_CONFIG.services.supabase;
 }
 
+export function getManagedBackendProductConfig() {
+  return APP_CONFIG.services?.backend || DEFAULT_APP_CONFIG.services.backend;
+}
+
 export function hasSupabaseProductConfig() {
   const config = getSupabaseProductConfig();
   return Boolean(config.enabled && config.url && config.anonKey);
+}
+
+export function hasManagedBackendProductConfig() {
+  const config = getManagedBackendProductConfig();
+  return Boolean(config.enabled && config.url);
+}
+
+export function hasCloudProductConfig() {
+  return hasSupabaseProductConfig() || hasManagedBackendProductConfig();
 }
 
 export function getFlowiseProductConfig() {

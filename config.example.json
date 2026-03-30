@@ -10,8 +10,12 @@
     ]
   },
   "services": {
-    "supabase": {
+    "backend": {
       "enabled": true,
+      "url": "https://YOUR_PRIVATE_BACKEND_DOMAIN"
+    },
+    "supabase": {
+      "enabled": false,
       "url": "https://YOUR_PROJECT.supabase.co",
       "anonKey": "YOUR_SUPABASE_ANON_KEY",
       "avatarBucket": "avatars",

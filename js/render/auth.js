@@ -1,15 +1,17 @@
-import { APP_CONFIG, hasFlowiseProductConfig, hasSupabaseProductConfig, isPreviewAuthEnabled } from "../app-config.js";
+import { APP_CONFIG, hasCloudProductConfig, hasFlowiseProductConfig, hasSupabaseProductConfig, isPreviewAuthEnabled } from "../app-config.js";
 import { state } from "../state.js";
 import { escapeHtml } from "../utils.js";
 import { icon } from "../ui.js";
 
 function authModeLabel() {
   if (hasSupabaseProductConfig()) return "Connexion sécurisée";
+  if (hasCloudProductConfig()) return "Backend sécurisé";
   return isPreviewAuthEnabled() ? "Mode local" : "Configuration requise";
 }
 
 function authSessionLabel() {
   if (state.authState.mode === "supabase") return "supabase";
+  if (state.authState.mode === "backend") return "backend";
   return isPreviewAuthEnabled() ? "local" : "verrouillé";
 }
 
@@ -20,7 +22,7 @@ function renderNotice() {
   if (state.authState.notice) {
     return `<div class="helper-note info-note">${escapeHtml(state.authState.notice)}</div>`;
   }
-  if (hasSupabaseProductConfig()) {
+  if (hasCloudProductConfig()) {
     return `<div class="helper-note calm-note">Compte unique, données connectées, modération admin et session persistante avant d’entrer dans l’app.</div>`;
   }
   if (isPreviewAuthEnabled()) {
@@ -32,7 +34,7 @@ function renderNotice() {
 export function renderAuth(node) {
   const isSignup = state.authScreenMode === "signup";
   const draft = state.authDraft || {};
-  const cloudReady = hasSupabaseProductConfig();
+  const cloudReady = hasCloudProductConfig();
   const previewEnabled = isPreviewAuthEnabled();
   const flowiseReady = hasFlowiseProductConfig();
   const isBusy = state.authState.status === "authenticating";

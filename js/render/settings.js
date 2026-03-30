@@ -64,7 +64,7 @@ function renderSummaryCard(shared, diagnostics) {
           </div>
           <div class="summary-chip summary-chip-coral">
             <span class="summary-label">Sync</span>
-            <strong>${diagnostics.supabaseConfigured && state.currentUser ? "cloud" : (diagnostics.supabaseConfigured ? "sécurisé" : "local dev")}</strong>
+            <strong>${diagnostics.cloudAuthConfigured && state.currentUser ? "cloud" : (diagnostics.cloudAuthConfigured ? "sécurisé" : "local dev")}</strong>
           </div>
         </div>
       </div>
@@ -348,6 +348,21 @@ function renderAISyncTab(shared, diagnostics) {
     : state.flowiseConfig.status === "fallback"
       ? "fallback"
       : "veille";
+  const storageLabel = diagnostics.backendConfigured
+    ? "Backend privé"
+    : diagnostics.supabaseConfigured
+      ? "Supabase"
+      : "local dev";
+  const authProviderLabel = diagnostics.backendConfigured
+    ? "Backend sécurisé"
+    : diagnostics.supabaseConfigured
+      ? "Supabase"
+      : "non branché";
+  const authServiceTitle = diagnostics.backendConfigured ? "Backend privé" : "Supabase";
+  const authServiceDescription = diagnostics.backendConfigured
+    ? "Socle produit privé: auth, sessions serveur, modération et synchronisation."
+    : "Socle produit interne: auth, Postgres, storage et temps réel.";
+  const authTestLabel = diagnostics.backendConfigured ? "Tester le backend" : "Tester Supabase";
 
   return `
     <div class="card settings-section module-settings surface-settings">
@@ -445,7 +460,7 @@ function renderAISyncTab(shared, diagnostics) {
           </div>
           <div class="summary-chip summary-chip-coral">
             <span class="summary-label">Stockage</span>
-            <strong>${diagnostics.supabaseConfigured ? "Supabase" : "local dev"}</strong>
+            <strong>${escapeHtml(storageLabel)}</strong>
           </div>
         </div>
         <div class="helper-note success-note">
@@ -465,15 +480,15 @@ function renderAISyncTab(shared, diagnostics) {
       <details class="settings-accordion">
         <summary>
           <span class="settings-accordion-copy">
-            <strong>Supabase</strong>
-            <small>Socle produit interne: auth, Postgres, storage et temps réel.</small>
+            <strong>${escapeHtml(authServiceTitle)}</strong>
+            <small>${escapeHtml(authServiceDescription)}</small>
           </span>
-          <span class="settings-accordion-meta">${diagnostics.supabaseConfigured ? "actif" : "non branché"}</span>
+          <span class="settings-accordion-meta">${diagnostics.cloudAuthConfigured ? "actif" : "non branché"}</span>
         </summary>
         <div class="settings-summary-grid">
           <div class="summary-chip summary-chip-blue">
             <span class="summary-label">Auth</span>
-            <strong>${diagnostics.supabaseConfigured ? "branché" : "non branché"}</strong>
+            <strong>${diagnostics.cloudAuthConfigured ? escapeHtml(authProviderLabel) : "non branché"}</strong>
           </div>
           <div class="summary-chip summary-chip-green">
             <span class="summary-label">Schéma</span>
@@ -485,12 +500,12 @@ function renderAISyncTab(shared, diagnostics) {
           </div>
         </div>
         <div class="helper-note ${state.supabaseConfig.status === "error" ? "alert-note" : "info-note"}">
-          Supabase ${escapeHtml(state.supabaseConfig.status || "idle")}
+          ${escapeHtml(authServiceTitle)} ${escapeHtml(state.supabaseConfig.status || "idle")}
           ${state.supabaseConfig.lastCheckedAt ? `• ${escapeHtml(formatDateTime(state.supabaseConfig.lastCheckedAt))}` : ""}
           ${state.supabaseConfig.error ? `• ${escapeHtml(state.supabaseConfig.error)}` : ""}
         </div>
         <div class="actions-row two">
-          <button class="btn btn-main" data-action="test-supabase-config">Tester Supabase</button>
+          <button class="btn btn-main" data-action="test-supabase-config">${escapeHtml(authTestLabel)}</button>
           <button class="btn btn-outline" data-action="pull-sync">Recharger les données</button>
         </div>
       </details>

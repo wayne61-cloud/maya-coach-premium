@@ -31,27 +31,39 @@ http://localhost:8787/api/maya-coach/health
 
 If proxy fails, the app falls back automatically to the local generator.
 
-## 2. Start the lightweight sync backend
+## 2. Start the private backend
 
 ```bash
 cd "/Users/yohannbouah/Desktop/code app/coach"
-export MAYA_DEV_TOKEN="maya-dev-token"
+export MAYA_ADMIN_EMAILS="admin@maya.fitness"
+export MAYA_ADMIN_PASSWORD="ChangeThisNow123!"
+export MAYA_ADMIN_DISPLAY_NAME="MAYA Admin"
+export MAYA_ALLOWED_ORIGINS="http://localhost:8080"
 node api/maya-coach-backend.mjs
 ```
 
 Available endpoints:
 
-- `POST /api/auth/magic-link`
+- `POST /api/auth/signup`
+- `POST /api/auth/signin`
+- `POST /api/auth/signout`
+- `GET /api/auth/session`
 - `GET /api/sync/pull`
 - `POST /api/sync/push`
 - `PUT /api/profile`
+- `GET /api/admin/dashboard`
+- `PATCH /api/admin/users/:id/status`
+- `DELETE /api/admin/photos/:id`
+- `DELETE /api/admin/users/:id/photos`
 - `GET /api/health`
 
-This backend is intentionally lightweight:
+This backend is now a real product backend:
 
-- it prepares cloud sync for history, favoris, profil, évolution du poids, nutrition, IA et notifications,
-- it simulates a magic-link flow for local development,
-- it does not yet wire real Google / Apple / email providers.
+- it uses SQLite for persistent users, sessions and synced state,
+- it supports real email/password auth,
+- it seeds a protected admin account from environment variables,
+- it moderates new signups by default with `pending` status,
+- it exposes admin moderation and photo review endpoints.
 
 ## 3. Serve the frontend over HTTP
 
@@ -64,4 +76,27 @@ Open:
 
 ```text
 http://localhost:8080/index.html
+```
+
+Create `config.json` at the project root with:
+
+```json
+{
+  "auth": {
+    "previewEnabled": true,
+    "adminEmails": ["admin@maya.fitness"]
+  },
+  "services": {
+    "backend": {
+      "enabled": true,
+      "url": "http://localhost:8788"
+    },
+    "flowise": {
+      "enabled": false,
+      "apiHost": "",
+      "chatflowId": "",
+      "version": "latest"
+    }
+  }
+}
 ```
