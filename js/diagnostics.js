@@ -1,3 +1,4 @@
+import { hasFlowiseProductConfig, hasSupabaseProductConfig } from "./app-config.js";
 import { storageAvailable } from "./storage.js";
 import { state } from "./state.js";
 
@@ -33,10 +34,15 @@ export function getAppDiagnostics() {
     proxyPublicBlocked,
     localHost,
     syncConfigured: Boolean(state.syncConfig.endpoint && state.syncConfig.token),
+    supabaseConfigured: hasSupabaseProductConfig(),
+    flowiseConfigured: hasFlowiseProductConfig(),
     aiMode: state.aiConfig.mode,
     aiRuntime: state.aiRuntime,
     syncRuntime: state.syncRuntime,
-    notificationConfig: state.notificationConfig
+    notificationConfig: state.notificationConfig,
+    authState: state.authState,
+    supabaseConfig: state.supabaseConfig,
+    flowiseConfig: state.flowiseConfig
   };
 }
 

@@ -1,11 +1,11 @@
 {
-  "name": "MAYA Coach",
-  "short_name": "MAYA Coach",
-  "description": "Coach IA premium avec suivi d'évolution, nutrition et recovery.",
-  "start_url": "./index.html?v=20260329-3",
+  "name": "MAYA Fitness",
+  "short_name": "MAYA",
+  "description": "MAYA Fitness: entraînement, suivi, nutrition et recovery.",
+  "start_url": "./index.html?v=20260330-1",
   "display": "standalone",
-  "background_color": "#120902",
-  "theme_color": "#1f1204",
+  "background_color": "#080808",
+  "theme_color": "#0b0b0b",
   "lang": "fr",
   "icons": [
     {

@@ -1,14 +1,29 @@
-import { buildAdaptiveInputsFromHistory, generateAIPlan, generatePlanWithCloudFallback, prefillAIFromExercise, testAIConfig, updateAIConfig } from "./ai.js";
-import { EXO_BY_ID, EXOS, NOUSHI_BY_ID, RECIPE_BY_ID, RELAX_BY_ID } from "./catalog.js";
+import { buildAdaptiveInputsFromHistory, generateAIPlan, generatePlanWithCloudFallback, prefillAIFromExercise, testAIConfig } from "./ai.js";
+import { EXO_BY_ID, EXOS, NOUSHI_BY_ID, RECIPE_BY_ID, RELAX_BY_ID, getExercisesByPlace } from "./catalog.js";
 import { getAppDiagnostics } from "./diagnostics.js";
-import { notifyTopRecommendation, refreshNotificationPermission, registerServiceWorker, requestNotificationPermission, startNotificationPulse } from "./notifications.js";
+import { generateFlowiseSessionId, syncFlowiseWidget, updateFlowiseConfig } from "./flowise.js";
+import { ensureLiteYouTubeEmbed } from "./lite-youtube.js";
+import { notifyTopRecommendation, refreshNotificationPermission, registerServiceWorker, requestNotificationPermission, sendCoachNotification, startNotificationPulse } from "./notifications.js";
 import { buildDailyMealPlan, inferTrainingLoad, saveNutritionPlan } from "./nutrition.js";
-import { goToPage, initRouter, refreshCurrentPage } from "./router.js";
+import { goBack, goToPage, initRouter, refreshCurrentPage, refreshShell } from "./router.js";
 import { computeCoachRecommendations } from "./recommendations.js";
-import { pullSyncSnapshot, pushSyncSnapshot, requestMagicLink, scheduleAutoSync, updateSyncConfig } from "./sync.js";
-import { defaultCustomWorkoutDraft, defaultProfile, persistFavorites, state, updateProfile } from "./state.js";
+import {
+  continueWithPreview,
+  deleteAdminProgressPhoto,
+  deleteAdminUserPhotos,
+  initializeAuth,
+  isCloudSessionReady,
+  refreshAdminDashboard,
+  setAdminUserStatus,
+  signInWithPassword,
+  signOutCurrentUser,
+  signUpWithPassword,
+  testSupabaseConfig
+} from "./supabase.js";
+import { pullSyncSnapshot, pushSyncSnapshot, scheduleAutoSync } from "./sync.js";
+import { defaultCustomWorkoutDraft, defaultProfile, persistFavorites, persistVisualProgressEntries, resetPhotoProgressDraft, state, updateProfile } from "./state.js";
 import { APP_VERSION } from "./version.js";
-import { applyFeedback, buildAdjustedPlan, buildCustomPlanFromDraft, buildMinimalPlanAroundExercise, createProtocolHistoryEntry, finishWorkout, historyEntryToPlan, resetCustomWorkoutDraft, startPlan, workoutDoneAction, workoutModifyAction, workoutSkipAction } from "./workout.js";
+import { appendExerciseToCustomWorkout, applyFeedback, buildAdjustedPlan, buildCustomPlanFromDraft, buildCustomWorkoutCoachAlerts, buildNoushiChallengePlan, createCustomWorkoutSession, createProtocolHistoryEntry, finishWorkout, historyEntryToPlan, removeCustomWorkoutSession, resetCustomWorkoutDraft, setActiveCustomWorkoutSession, setCustomWorkoutDraft, startPlan, workoutDoneAction, workoutModifyAction, workoutSkipAction } from "./workout.js";
 
 function showToast(message) {
   const toast = document.getElementById("toast");
@@ -51,7 +66,7 @@ function toggleFavorite(type, id) {
 function getIAInputsFromDom() {
   return {
     time: parseInt(document.getElementById("iaTime")?.value || state.profile?.sessionTime || "35", 10),
-    place: document.getElementById("iaPlace")?.value || state.profile?.place || "maison",
+    place: document.getElementById("iaPlace")?.value || state.profile?.place || defaultProfile.place,
     zone: document.getElementById("iaZone")?.value || "full",
     energy: document.getElementById("iaEnergy")?.value || "normal",
     goal: document.getElementById("iaGoal")?.value || state.profile?.goal || "muscle",
@@ -61,16 +76,6 @@ function getIAInputsFromDom() {
     seedExerciseIds: state.aiDraft.seedExerciseIds || [],
     cycleWeek: state.cycleState.cycleWeek,
     athleteProfile: state.profile || defaultProfile
-  };
-}
-
-function getAIConfigFromDom() {
-  return {
-    mode: document.getElementById("iaProviderMode")?.value || state.aiConfig.mode,
-    model: document.getElementById("iaModel")?.value || state.aiConfig.model,
-    proxyEndpoint: document.getElementById("iaProxyEndpoint")?.value || state.aiConfig.proxyEndpoint,
-    apiKey: document.getElementById("iaApiKey")?.value || state.aiConfig.apiKey,
-    webSearch: (document.getElementById("iaWebSearch")?.value || "off") === "on"
   };
 }
 
@@ -84,7 +89,11 @@ function getProfileFromDom() {
     level: document.getElementById("profileLevel")?.value || state.profile?.level || defaultProfile.level,
     frequency: document.getElementById("profileFrequency")?.value || state.profile?.frequency || defaultProfile.frequency,
     place: document.getElementById("profilePlace")?.value || state.profile?.place || defaultProfile.place,
-    sessionTime: document.getElementById("profileSessionTime")?.value || state.profile?.sessionTime || defaultProfile.sessionTime
+    sessionTime: document.getElementById("profileSessionTime")?.value || state.profile?.sessionTime || defaultProfile.sessionTime,
+    preferredSplit: document.getElementById("profilePreferredSplit")?.value || state.profile?.preferredSplit || defaultProfile.preferredSplit,
+    foodPreference: document.getElementById("profileFoodPreference")?.value || state.profile?.foodPreference || defaultProfile.foodPreference,
+    recoveryPreference: document.getElementById("profileRecoveryPreference")?.value || state.profile?.recoveryPreference || defaultProfile.recoveryPreference,
+    coachTone: document.getElementById("profileCoachTone")?.value || state.profile?.coachTone || defaultProfile.coachTone
   };
 }
 
@@ -134,13 +143,98 @@ async function resolveProfilePhotoForSave() {
   return nextPhoto;
 }
 
-function getSyncConfigFromDom() {
-  return {
-    endpoint: document.getElementById("syncEndpoint")?.value || state.syncConfig.endpoint,
-    email: document.getElementById("syncEmail")?.value || state.syncConfig.email,
-    token: document.getElementById("syncToken")?.value || state.syncConfig.token,
-    autoSync: (document.getElementById("syncAuto")?.value || "off") === "on"
+function setAuthRuntimeState(partialState) {
+  state.authState = {
+    ...(state.authState || {}),
+    ...partialState,
+    initialized: true
   };
+}
+
+async function routeAfterAuthentication() {
+  if (!state.currentUser) {
+    await navigateToPage("auth");
+    refreshCurrentPage();
+    return;
+  }
+
+  state.authDraft = {
+    ...(state.authDraft || {}),
+    password: "",
+    confirmPassword: ""
+  };
+  state.flowiseConfig.enabled = true;
+  updateFlowiseConfig({
+    enabled: true,
+    sessionId: generateFlowiseSessionId()
+  });
+  await navigateToPage("home");
+  refreshCurrentPage();
+  await pullSyncSnapshot().catch(() => {});
+  refreshCurrentPage();
+  await syncFlowiseWidget().catch(() => {});
+}
+
+async function handleAuthSubmit() {
+  const payload = {
+    displayName: String(state.authDraft.displayName || "").trim(),
+    email: String(state.authDraft.email || "").trim(),
+    password: String(state.authDraft.password || "").trim()
+  };
+
+  setAuthRuntimeState({
+    status: "authenticating",
+    error: "",
+    notice: ""
+  });
+  refreshCurrentPage();
+
+  try {
+    if (state.authScreenMode === "signup") {
+      if (payload.password !== String(state.authDraft.confirmPassword || "").trim()) {
+        throw new Error("Les mots de passe ne correspondent pas");
+      }
+      await signUpWithPassword(payload);
+      showToast(state.currentUser ? "Compte créé" : "Compte créé, vérifie ta boîte mail");
+    } else {
+      await signInWithPassword(payload);
+      showToast("Connexion réussie");
+    }
+    await routeAfterAuthentication();
+  } catch (error) {
+    setAuthRuntimeState({
+      status: "signed_out",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    refreshCurrentPage();
+    showToast(error instanceof Error ? error.message : "Erreur d’auth");
+  }
+}
+
+async function handlePreviewEntry() {
+  setAuthRuntimeState({
+    status: "authenticating",
+    error: "",
+    notice: ""
+  });
+  refreshCurrentPage();
+
+  try {
+    await continueWithPreview({
+      displayName: state.authDraft.displayName,
+      email: state.authDraft.email,
+      password: state.authDraft.password
+    });
+    showToast("Mode local prêt");
+    await routeAfterAuthentication();
+  } catch (error) {
+    setAuthRuntimeState({
+      status: "signed_out",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    refreshCurrentPage();
+    showToast(error instanceof Error ? error.message : "Erreur accès local");
+  }
 }
 
 async function handleGeneratePlan() {
@@ -161,6 +255,7 @@ async function handleGeneratePlan() {
   try {
     const result = await generatePlanWithCloudFallback(getIAInputsFromDom());
     state.currentPlan = result.plan;
+    state.coachSheetOpen = false;
     state.aiRuntime = {
       source: result.source,
       latencyMs: result.latencyMs,
@@ -190,7 +285,7 @@ async function handleGeneratePlan() {
 async function handleQuickSession() {
   const inputs = {
     time: parseInt(state.profile?.sessionTime || "20", 10),
-    place: state.profile?.place === "salle" ? "salle" : "maison",
+    place: state.profile?.place || defaultProfile.place,
     zone: "full",
     energy: "normal",
     goal: state.profile?.goal || "muscle",
@@ -215,11 +310,29 @@ function runGeneratedPlan() {
   showToast("Séance démarrée");
 }
 
+function resolveExerciseFilterMode(exercise) {
+  return ["maison", "salle", "mixte"].includes(exercise?.pole || "")
+    ? exercise.pole
+    : "all";
+}
+
+function focusExerciseCatalog(exerciseId, { withSimilar = true } = {}) {
+  const exercise = EXO_BY_ID.get(exerciseId);
+  if (!exercise) return false;
+
+  state.exoFilter = {
+    search: exercise.nom || "",
+    mode: resolveExerciseFilterMode(exercise),
+    muscle: "all",
+    similarTo: withSimilar ? exercise.id : ""
+  };
+  goToPage("exos");
+  return true;
+}
+
 function openGlobalResult(type, id) {
   if (type === "exo") {
-    state.exoFilter.search = EXO_BY_ID.get(id)?.nom || "";
-    state.exoFilter.similarTo = "";
-    goToPage("exos");
+    focusExerciseCatalog(id);
     return;
   }
   if (type === "recipe") {
@@ -257,64 +370,105 @@ async function saveProfileFromInputs() {
   refreshCurrentPage();
 }
 
+async function navigateToPage(page, options = {}) {
+  goToPage(page, options);
+
+  if (page === "admin" && state.profile?.role === "admin" && isCloudSessionReady()) {
+    try {
+      await refreshAdminDashboard();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Erreur admin");
+    }
+    refreshCurrentPage();
+  }
+}
+
 function openSettingsTab(tab) {
-  state.settingsTab = tab || "profile";
+  const aliases = {
+    profile: "identity",
+    coach: "ai-sync",
+    sync: "ai-sync",
+    app: "ai-sync",
+    system: "ai-sync"
+  };
+  state.settingsTab = aliases[tab] || tab || "identity";
   goToPage("settings");
 }
 
 function ensureCustomWorkoutDraft() {
   if (!state.customWorkoutDraft) {
-    state.customWorkoutDraft = structuredClone(defaultCustomWorkoutDraft);
+    setCustomWorkoutDraft(structuredClone(defaultCustomWorkoutDraft));
   }
+}
+
+function clearPendingCustomWorkoutTarget() {
+  state.customWorkoutPendingExerciseId = "";
+}
+
+function createNewCustomWorkoutSession({ pendingExerciseId = "", title = "" } = {}) {
+  const session = createCustomWorkoutSession({
+    title: title || undefined,
+    place: state.profile?.place || defaultProfile.place
+  });
+  if (!session) return null;
+  state.customWorkoutSearch = "";
+  if (pendingExerciseId) {
+    appendExerciseToCustomWorkout(pendingExerciseId, session.id);
+    clearPendingCustomWorkoutTarget();
+  }
+  return session;
+}
+
+function addExerciseToChosenCustomWorkout(sessionId, exerciseId) {
+  const draft = appendExerciseToCustomWorkout(exerciseId, sessionId);
+  if (!draft) return null;
+  setActiveCustomWorkoutSession(sessionId);
+  state.customWorkoutSearch = "";
+  clearPendingCustomWorkoutTarget();
+  return draft;
 }
 
 function updateCustomWorkoutField(field, value) {
   ensureCustomWorkoutDraft();
-  state.customWorkoutDraft = {
+  setCustomWorkoutDraft({
     ...state.customWorkoutDraft,
     [field]: value
-  };
+  });
+  queueCustomWorkoutNotification();
 }
 
 function updateCustomWorkoutBlock(blockId, field, value) {
   ensureCustomWorkoutDraft();
-  state.customWorkoutDraft = {
+  setCustomWorkoutDraft({
     ...state.customWorkoutDraft,
     blocks: (state.customWorkoutDraft.blocks || []).map((block) => (
       block.id === blockId
         ? { ...block, [field]: value }
         : block
     ))
-  };
+  });
+  queueCustomWorkoutNotification();
 }
 
 function addCustomWorkoutBlock() {
   ensureCustomWorkoutDraft();
-  const usedExerciseIds = new Set((state.customWorkoutDraft.blocks || []).map((block) => block.exerciseId));
-  const fallbackExercise = EXOS.find((exercise) => !usedExerciseIds.has(exercise.id)) || EXOS[0];
-  state.customWorkoutDraft = {
+  setCustomWorkoutDraft({
     ...state.customWorkoutDraft,
-    blocks: [
-      ...(state.customWorkoutDraft.blocks || []),
-      {
-        id: `block_${Date.now()}`,
-        exerciseId: fallbackExercise?.id || "pushup_classic",
-        sets: "3",
-        reps: "10-12",
-        restSec: "60"
-      }
-    ]
-  };
+    targetExerciseCount: String(Math.min(12, (state.customWorkoutDraft.blocks || []).length + 1))
+  });
+  queueCustomWorkoutNotification();
 }
 
 function removeCustomWorkoutBlock(blockId) {
   ensureCustomWorkoutDraft();
   const nextBlocks = (state.customWorkoutDraft.blocks || []).filter((block) => block.id !== blockId);
   if (!nextBlocks.length) return false;
-  state.customWorkoutDraft = {
+  setCustomWorkoutDraft({
     ...state.customWorkoutDraft,
+    targetExerciseCount: String(nextBlocks.length),
     blocks: nextBlocks
-  };
+  });
+  queueCustomWorkoutNotification();
   return true;
 }
 
@@ -329,13 +483,129 @@ function startCustomWorkout() {
   showToast("Séance personnalisée démarrée");
 }
 
+function getTopCustomWorkoutAlert() {
+  return buildCustomWorkoutCoachAlerts(state.customWorkoutDraft)[0] || null;
+}
+
+function queueCustomWorkoutNotification() {
+  const topAlert = getTopCustomWorkoutAlert();
+  if (!topAlert || !["alert", "warn"].includes(topAlert.tone)) return;
+  if (state.notificationConfig.permission !== "granted" || !state.notificationConfig.enabled) return;
+
+  const signature = `${topAlert.id}:${topAlert.title}:${topAlert.body}`;
+  if (state.customCoachRuntime.lastAlertSignature === signature) return;
+  state.customCoachRuntime.lastAlertSignature = signature;
+  sendCoachNotification("Maya Coach", topAlert.body, { page: "my-session", tone: topAlert.tone }).catch(() => {});
+}
+
+async function sendCustomWorkoutNotification() {
+  const topAlert = getTopCustomWorkoutAlert();
+  if (!topAlert) {
+    showToast("Aucune alerte à envoyer");
+    return;
+  }
+  const result = await sendCoachNotification("Maya Coach", topAlert.body, { page: "my-session", tone: topAlert.tone });
+  showToast(result.sent ? "Notification envoyée" : "Active les notifications d’abord");
+}
+
+function updatePhotoProgressDraft(field, value) {
+  state.photoProgressDraft = {
+    ...(state.photoProgressDraft || resetPhotoProgressDraft()),
+    [field]: value
+  };
+}
+
+async function saveProgressPhoto() {
+  const draft = state.photoProgressDraft || resetPhotoProgressDraft();
+  if (!draft.photoDataUrl) {
+    showToast("Ajoute une photo pour la frise");
+    return;
+  }
+
+  const entry = {
+    ...draft,
+    id: `progress_${Date.now()}`
+  };
+
+  state.visualProgressEntries = [entry, ...(state.visualProgressEntries || [])]
+    .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())
+    .slice(0, 120);
+  persistVisualProgressEntries();
+
+  if (draft.weightKg && String(draft.weightKg) !== String(state.profile?.weightKg || "")) {
+    updateProfile({
+      ...(state.profile || defaultProfile),
+      weightKg: String(draft.weightKg)
+    });
+  }
+
+  resetPhotoProgressDraft({ zone: draft.zone });
+  refreshCurrentPage();
+
+  if (isCloudSessionReady()) {
+    try {
+      await pushSyncSnapshot();
+      await pullSyncSnapshot();
+      showToast("Progression visuelle synchronisée");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Erreur de sync cloud");
+    }
+    refreshCurrentPage();
+    return;
+  }
+
+  scheduleAutoSync();
+  showToast("Photo ajoutée à la frise");
+}
+
+async function handleAdminRefresh() {
+  await refreshAdminDashboard();
+  refreshCurrentPage();
+}
+
+function updateAdminFilter(field, value) {
+  state.adminRuntime = {
+    ...(state.adminRuntime || {}),
+    [field]: value
+  };
+  refreshCurrentPage();
+}
+
 async function routeAction(action, target) {
   switch (action) {
+    case "auth-set-mode":
+      state.authScreenMode = target.dataset.mode === "signup" ? "signup" : "login";
+      state.authState = { ...(state.authState || {}), error: "", notice: "" };
+      refreshCurrentPage();
+      return;
+    case "auth-submit":
+      await handleAuthSubmit();
+      return;
+    case "auth-use-demo":
+      await handlePreviewEntry();
+      return;
+    case "toggle-nav":
+      state.navExpanded = !state.navExpanded;
+      refreshShell();
+      return;
     case "go-page":
-      goToPage(target.dataset.page);
+      await navigateToPage(target.dataset.page);
+      return;
+    case "go-back":
+      goBack();
       return;
     case "go-settings-tab":
       openSettingsTab(target.dataset.tab);
+      return;
+    case "open-sheet":
+      if (target.dataset.sheet === "coach") state.coachSheetOpen = true;
+      if (target.dataset.sheet === "nutrition") state.nutritionSheetOpen = true;
+      refreshCurrentPage();
+      return;
+    case "close-sheet":
+      if (target.dataset.sheet === "coach") state.coachSheetOpen = false;
+      if (target.dataset.sheet === "nutrition") state.nutritionSheetOpen = false;
+      refreshCurrentPage();
       return;
     case "go-ia":
       goToPage("ia");
@@ -357,6 +627,14 @@ async function routeAction(action, target) {
       state.exoFilter.search = "";
       refreshCurrentPage();
       return;
+    case "set-exo-mode":
+      state.exoFilter.mode = target.dataset.mode || "all";
+      refreshCurrentPage();
+      return;
+    case "clear-custom-session-search":
+      state.customWorkoutSearch = "";
+      refreshCurrentPage();
+      return;
     case "clear-nutrition-search":
       state.nutritionFilter.search = "";
       refreshCurrentPage();
@@ -373,21 +651,67 @@ async function routeAction(action, target) {
         refreshCurrentPage();
       }
       return;
+    case "create-custom-workout-session":
+      createNewCustomWorkoutSession({
+        pendingExerciseId: state.customWorkoutPendingExerciseId,
+        title: target.dataset.title || ""
+      });
+      refreshCurrentPage();
+      return;
+    case "activate-custom-workout-session":
+      setActiveCustomWorkoutSession(target.dataset.id);
+      refreshCurrentPage();
+      return;
+    case "remove-custom-workout-session":
+      removeCustomWorkoutSession(target.dataset.id);
+      clearPendingCustomWorkoutTarget();
+      refreshCurrentPage();
+      return;
+    case "choose-custom-workout-session":
+      if (!state.customWorkoutPendingExerciseId) return;
+      addExerciseToChosenCustomWorkout(target.dataset.id, state.customWorkoutPendingExerciseId);
+      showToast("Exercice ajouté à la séance choisie");
+      refreshCurrentPage();
+      return;
+    case "cancel-custom-workout-target":
+      clearPendingCustomWorkoutTarget();
+      refreshCurrentPage();
+      return;
     case "reset-custom-workout":
-      resetCustomWorkoutDraft();
+      resetCustomWorkoutDraft({
+        place: state.customWorkoutDraft?.place || state.profile?.place || defaultCustomWorkoutDraft.place
+      });
       refreshCurrentPage();
       return;
     case "start-custom-workout":
       startCustomWorkout();
       return;
-    case "save-ai-config":
-      updateAIConfig(getAIConfigFromDom());
-      scheduleAutoSync();
-      showToast("Config IA sauvegardée");
+    case "send-custom-workout-notification":
+      await sendCustomWorkoutNotification();
+      return;
+    case "save-progress-photo":
+      await saveProgressPhoto();
+      return;
+    case "sync-flowise-widget": {
+      const result = await syncFlowiseWidget();
+      showToast(result.ok
+        ? "Flowise relancé"
+        : (result.error || "Flowise à vérifier"));
       refreshCurrentPage();
       return;
+    }
+    case "reset-flowise-session": {
+      updateFlowiseConfig({
+        sessionId: generateFlowiseSessionId(),
+        status: "idle",
+        error: ""
+      });
+      const result = await syncFlowiseWidget();
+      showToast(result.ok ? "Nouvelle session Flowise" : "Session Flowise régénérée");
+      refreshCurrentPage();
+      return;
+    }
     case "test-ai-config":
-      updateAIConfig(getAIConfigFromDom());
       await testAIConfig();
       showToast(`Test IA terminé • ${state.aiRuntime.source}`);
       refreshCurrentPage();
@@ -414,24 +738,13 @@ async function routeAction(action, target) {
       refreshCurrentPage();
       return;
     }
-    case "save-sync-config":
-      updateSyncConfig(getSyncConfigFromDom());
-      showToast("Config sync sauvegardée");
-      refreshCurrentPage();
-      return;
-    case "request-magic-link": {
-      updateSyncConfig(getSyncConfigFromDom());
-      try {
-        const result = await requestMagicLink();
-        showToast(result.previewLink ? "Magic link locale prête" : "Magic link générée");
-      } catch (error) {
-        showToast(error instanceof Error ? error.message : "Erreur auth");
-      }
+    case "test-supabase-config": {
+      const result = await testSupabaseConfig();
+      showToast(result.ok ? "Supabase joignable" : (result.error || "Erreur Supabase"));
       refreshCurrentPage();
       return;
     }
     case "push-sync":
-      updateSyncConfig(getSyncConfigFromDom());
       try {
         await pushSyncSnapshot();
         showToast("Historique synchronisé");
@@ -441,7 +754,6 @@ async function routeAction(action, target) {
       refreshCurrentPage();
       return;
     case "pull-sync":
-      updateSyncConfig(getSyncConfigFromDom());
       try {
         await pullSyncSnapshot();
         showToast("Données récupérées");
@@ -449,6 +761,13 @@ async function routeAction(action, target) {
         showToast(error instanceof Error ? error.message : "Erreur sync");
       }
       refreshCurrentPage();
+      return;
+    case "logout":
+      await signOutCurrentUser();
+      showToast("Session fermée");
+      await navigateToPage("auth");
+      refreshCurrentPage();
+      await syncFlowiseWidget().catch(() => {});
       return;
     case "toggle-favorite":
       toggleFavorite(target.dataset.type, target.dataset.id);
@@ -458,11 +777,25 @@ async function routeAction(action, target) {
       openGlobalResult(target.dataset.type, target.dataset.id);
       return;
     case "add-exo-session": {
-      const plan = buildMinimalPlanAroundExercise(target.dataset.id);
-      if (!plan) return;
-      startPlan(plan);
-      goToPage("workout");
-      showToast("Séance focus lancée");
+      if ((state.customWorkoutLibrary || []).length > 1) {
+        state.customWorkoutPendingExerciseId = target.dataset.id || "";
+        await navigateToPage("my-session");
+        showToast("Choisis la séance cible");
+        return;
+      }
+      const targetSessionId = state.activeCustomWorkoutId || state.customWorkoutDraft?.id;
+      const draft = appendExerciseToCustomWorkout(target.dataset.id, targetSessionId);
+      if (!draft) return;
+      await navigateToPage("my-session");
+      showToast("Exercice ajouté à Ma séance");
+      return;
+    }
+    case "add-exo-active-session": {
+      const targetSessionId = state.activeCustomWorkoutId || state.customWorkoutDraft?.id;
+      const draft = appendExerciseToCustomWorkout(target.dataset.id, targetSessionId);
+      if (!draft) return;
+      showToast("Exercice ajouté à la séance active");
+      refreshCurrentPage();
       return;
     }
     case "ai-around-exo": {
@@ -474,14 +807,72 @@ async function routeAction(action, target) {
       return;
     }
     case "show-similar-exos":
-      state.exoFilter.similarTo = target.dataset.id;
-      refreshCurrentPage();
+      focusExerciseCatalog(target.dataset.id, { withSimilar: true });
       return;
     case "open-exo-focus":
-      state.exoFilter.search = EXO_BY_ID.get(target.dataset.id)?.nom || "";
-      state.exoFilter.similarTo = target.dataset.id;
+      focusExerciseCatalog(target.dataset.id, { withSimilar: true });
+      return;
+    case "open-help-search":
+      state.exoFilter = {
+        search: target.dataset.search || "",
+        mode: target.dataset.mode || "all",
+        muscle: "all",
+        similarTo: ""
+      };
+      goToPage("exos");
+      return;
+    case "set-noushi-place":
+      state.noushiFilter.place = target.dataset.place || "mixte";
       refreshCurrentPage();
       return;
+    case "admin-refresh":
+      await handleAdminRefresh();
+      showToast("Dashboard admin actualisé");
+      return;
+    case "admin-filter-user":
+      updateAdminFilter(
+        "selectedProfileId",
+        state.adminRuntime?.selectedProfileId === target.dataset.id ? "" : (target.dataset.id || "")
+      );
+      return;
+    case "admin-clear-user-filter":
+      updateAdminFilter("selectedProfileId", "");
+      return;
+    case "admin-delete-photo":
+      if (!window.confirm("Supprimer cette photo de progression ?")) return;
+      await deleteAdminProgressPhoto(target.dataset.id);
+      showToast("Photo supprimée");
+      refreshCurrentPage();
+      return;
+    case "admin-delete-user-photos":
+      if (!window.confirm("Supprimer toutes les photos de cet utilisateur ?")) return;
+      await deleteAdminUserPhotos(target.dataset.id);
+      showToast("Toutes les photos ont été supprimées");
+      refreshCurrentPage();
+      return;
+    case "admin-set-user-status": {
+      const nextStatus = target.dataset.status || "active";
+      const label = nextStatus === "pending"
+        ? "mettre en attente"
+        : nextStatus === "banned"
+          ? "bannir"
+          : nextStatus === "suspended"
+            ? "suspendre"
+            : "réactiver";
+      if (!window.confirm(`Confirmer: ${label} cet utilisateur ?`)) return;
+      await setAdminUserStatus(target.dataset.id, nextStatus);
+      showToast(`Statut mis à jour: ${nextStatus}`);
+      refreshCurrentPage();
+      return;
+    }
+    case "start-noushi-challenge": {
+      const plan = buildNoushiChallengePlan(target.dataset.id, target.dataset.place || state.noushiFilter.place);
+      if (!plan) return;
+      startPlan(plan);
+      goToPage("workout");
+      showToast("Défi NOUSHI lancé");
+      return;
+    }
     case "replay-session": {
       const entry = state.history.find((item) => item.id === target.dataset.id);
       if (!entry) return;
@@ -593,14 +984,15 @@ async function routeAction(action, target) {
 }
 
 function bindEvents() {
-  document.getElementById("btnEnterApp").addEventListener("click", () => {
-    document.getElementById("launchScreen").classList.add("hidden");
-  });
-
-  document.getElementById("mainNav").addEventListener("click", (event) => {
+  document.getElementById("mainNav").addEventListener("click", async (event) => {
     const button = event.target.closest(".nav-btn");
     if (!button) return;
-    goToPage(button.dataset.page);
+    await navigateToPage(button.dataset.page);
+  });
+  document.getElementById("quickNav").addEventListener("click", async (event) => {
+    const button = event.target.closest(".quick-nav-btn");
+    if (!button) return;
+    await navigateToPage(button.dataset.page);
   });
 
   document.addEventListener("click", async (event) => {
@@ -609,7 +1001,7 @@ function bindEvents() {
     await routeAction(target.dataset.action, target);
   });
 
-    document.addEventListener("input", (event) => {
+  document.addEventListener("input", (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
     if (target.dataset?.onboardingField) {
@@ -620,10 +1012,23 @@ function bindEvents() {
       };
       return;
     }
+    if (target.dataset?.authField) {
+      state.authDraft = {
+        ...(state.authDraft || {}),
+        [target.dataset.authField]: target.value
+      };
+      return;
+    }
     if (target.id === "globalSearch") {
       state.globalSearch = target.value;
       refreshCurrentPage();
     }
+    if (target.id === "iaTime") state.aiDraft.time = target.value;
+    if (target.id === "iaPlace") state.aiDraft.place = target.value;
+    if (target.id === "iaZone") state.aiDraft.zone = target.value;
+    if (target.id === "iaEnergy") state.aiDraft.energy = target.value;
+    if (target.id === "iaGoal") state.aiDraft.goal = target.value;
+    if (target.id === "iaLevel") state.aiDraft.level = target.value;
     if (target.id === "exoSearch") {
       state.exoFilter.search = target.value;
       refreshCurrentPage();
@@ -632,12 +1037,24 @@ function bindEvents() {
       state.nutritionFilter.search = target.value;
       refreshCurrentPage();
     }
+    if (target.id === "customSessionSearch") {
+      state.customWorkoutSearch = target.value;
+      refreshCurrentPage();
+    }
+    if (target.dataset?.adminFilter === "filter") {
+      updateAdminFilter("filter", target.value);
+      return;
+    }
     if (target.dataset?.customWorkoutField) {
       updateCustomWorkoutField(target.dataset.customWorkoutField, target.value);
       return;
     }
     if (target.dataset?.customBlockField && target.dataset?.customBlockId) {
       updateCustomWorkoutBlock(target.dataset.customBlockId, target.dataset.customBlockField, target.value);
+      return;
+    }
+    if (target.dataset?.progressField) {
+      updatePhotoProgressDraft(target.dataset.progressField, target.value);
     }
   });
 
@@ -652,9 +1069,40 @@ function bindEvents() {
       };
       return;
     }
+    if (target.dataset?.authField) {
+      state.authDraft = {
+        ...(state.authDraft || {}),
+        [target.dataset.authField]: target.value
+      };
+      return;
+    }
     if (target.id === "exoMode") {
       state.exoFilter.mode = target.value;
       refreshCurrentPage();
+    }
+    if (target.id === "iaTime") {
+      state.aiDraft.time = target.value;
+      return;
+    }
+    if (target.id === "iaPlace") {
+      state.aiDraft.place = target.value;
+      return;
+    }
+    if (target.id === "iaZone") {
+      state.aiDraft.zone = target.value;
+      return;
+    }
+    if (target.id === "iaEnergy") {
+      state.aiDraft.energy = target.value;
+      return;
+    }
+    if (target.id === "iaGoal") {
+      state.aiDraft.goal = target.value;
+      return;
+    }
+    if (target.id === "iaLevel") {
+      state.aiDraft.level = target.value;
+      return;
     }
     if (target.id === "exoMuscle") {
       state.exoFilter.muscle = target.value;
@@ -672,12 +1120,26 @@ function bindEvents() {
       state.nutritionFilter.tag = target.value;
       refreshCurrentPage();
     }
+    if (target.dataset?.adminFilter === "statusFilter") {
+      updateAdminFilter("statusFilter", target.value);
+      return;
+    }
     if (target.dataset?.customWorkoutField) {
       updateCustomWorkoutField(target.dataset.customWorkoutField, target.value);
+      if (target.dataset.customWorkoutField === "place") {
+        refreshCurrentPage();
+      }
       return;
     }
     if (target.dataset?.customBlockField && target.dataset?.customBlockId) {
       updateCustomWorkoutBlock(target.dataset.customBlockId, target.dataset.customBlockField, target.value);
+      if (target.dataset.customBlockField === "exerciseId") {
+        refreshCurrentPage();
+      }
+      return;
+    }
+    if (target.dataset?.progressField) {
+      updatePhotoProgressDraft(target.dataset.progressField, target.value);
       return;
     }
     if (target.id === "profilePhotoInput" && target instanceof HTMLInputElement && target.files?.length) {
@@ -687,14 +1149,27 @@ function bindEvents() {
           refreshCurrentPage();
         })
         .catch(() => showToast("Photo invalide"));
+      return;
+    }
+    if (target.id === "progressPhotoInput" && target instanceof HTMLInputElement && target.files?.length) {
+      buildProfilePhotoDataUrl(target.files[0])
+        .then((nextPhoto) => {
+          state.photoProgressDraft = {
+            ...(state.photoProgressDraft || resetPhotoProgressDraft()),
+            photoDataUrl: nextPhoto
+          };
+          refreshCurrentPage();
+        })
+        .catch(() => showToast("Photo invalide"));
     }
   });
 }
 
-function init() {
+async function init() {
   syncViewportHeight();
   syncBuildLabel();
   updateClock();
+  ensureLiteYouTubeEmbed().catch(() => {});
   setInterval(updateClock, 15000);
   refreshNotificationPermission();
   bindEvents();
@@ -709,22 +1184,40 @@ function init() {
     });
     window.addEventListener("resize", syncViewportHeight);
     window.visualViewport?.addEventListener("resize", syncViewportHeight);
-    window.addEventListener("online", refreshCurrentPage);
+    window.addEventListener("online", () => {
+      if (state.currentUser) {
+        pullSyncSnapshot().catch(() => {});
+      }
+      syncFlowiseWidget().catch(() => {});
+      refreshCurrentPage();
+    });
     window.addEventListener("offline", refreshCurrentPage);
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) {
         syncViewportHeight();
         refreshNotificationPermission();
         notifyTopRecommendation(false).catch(() => {});
+        if (state.currentUser) {
+          pullSyncSnapshot().catch(() => {});
+        }
+        syncFlowiseWidget().catch(() => {});
         refreshCurrentPage();
       }
     });
   }
+
+  await initializeAuth();
   initRouter();
+  await navigateToPage(state.currentUser ? "home" : "auth", { resetHistory: true });
+  await syncFlowiseWidget().catch(() => {});
   const diagnostics = getAppDiagnostics();
   if (diagnostics.storageOk && computeCoachRecommendations().length && state.notificationConfig.enabled) {
     notifyTopRecommendation(false).catch(() => {});
   }
 }
 
-document.addEventListener("DOMContentLoaded", init);
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
+} else {
+  init();
+}

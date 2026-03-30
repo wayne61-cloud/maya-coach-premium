@@ -32,7 +32,7 @@ export function renderFavoris(node) {
                   <button class="icon-btn active" data-action="toggle-favorite" data-type="exo" data-id="${item.id}">⭐</button>
                 </div>
                 <div class="actions-row two">
-                  <button class="btn btn-main" data-action="add-exo-session" data-id="${item.id}">Lancer ce focus</button>
+                  <button class="btn btn-main" data-action="add-exo-session" data-id="${item.id}">Ajouter à Ma séance</button>
                   <button class="btn btn-soft" data-action="ai-around-exo" data-id="${item.id}">Séance IA associée</button>
                 </div>
               </article>

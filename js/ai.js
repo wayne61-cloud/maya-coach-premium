@@ -561,9 +561,10 @@ export function updateAIConfig(config) {
 }
 
 export function prefillAIFromExercise(exercise) {
+  const preferredPlace = state.profile?.place || "mixte";
   return {
     time: state.profile?.sessionTime || "35",
-    place: exercise.pole === "mixte" ? (state.profile?.place === "salle" ? "salle" : "maison") : exercise.pole,
+    place: exercise.pole === "mixte" ? preferredPlace : exercise.pole,
     zone: inferZoneFromExercise(exercise),
     energy: "normal",
     goal: inferGoalFromExercise(exercise),
@@ -578,7 +579,7 @@ export function buildAdaptiveInputsFromHistory(entry, mode = "adapt") {
   const baseTime = entry.durationRealMin || entry.durationMin || parseInt(state.profile?.sessionTime || "35", 10);
   return {
     time: mode === "shorter" ? clamp(baseTime - 10, 20, 60) : clamp(baseTime, 20, 60),
-    place: entry.place || state.profile?.place || "maison",
+    place: entry.place || state.profile?.place || "mixte",
     zone: entry.zone || "full",
     energy: entry.feedback === "dur" ? "fatigue" : "normal",
     goal: mode === "harder" ? "force" : entry.objective || state.profile?.goal || "muscle",

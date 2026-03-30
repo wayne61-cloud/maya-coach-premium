@@ -86,6 +86,19 @@ async function showNotification(title, body, data = {}) {
   return false;
 }
 
+export async function sendCoachNotification(title, body, data = {}) {
+  if (!state.notificationConfig.enabled || state.notificationConfig.permission !== "granted") {
+    return { sent: false, reason: "disabled" };
+  }
+  await showNotification(title, body, data);
+  state.notificationConfig = {
+    ...(state.notificationConfig || {}),
+    lastSentAt: new Date().toISOString()
+  };
+  persistNotificationConfig();
+  return { sent: true };
+}
+
 export async function notifyTopRecommendation(force = false) {
   if (!state.notificationConfig.enabled || state.notificationConfig.permission !== "granted") {
     return { sent: false, reason: "disabled" };

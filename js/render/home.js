@@ -1,182 +1,247 @@
-import { getCycleHeadline } from "../ai.js";
 import { getGlobalSearchResults } from "../catalog.js";
-import { getTrainingAwareRecipeSuggestions } from "../nutrition.js";
-import { computeCoachRecommendations, getWeightEvolution } from "../recommendations.js";
+import { getSharedDashboardData } from "../insights.js";
 import { state } from "../state.js";
-import { computeDashboardStats } from "../workout.js";
-import { buildEmptyState, escapeHtml, formatShortDate } from "../utils.js";
+import { buildEmptyState, escapeHtml, normalizeKey } from "../utils.js";
+import { icon, renderAnimatedFeed, renderCountup, renderProgressRing } from "../ui.js";
 
-function getAthleteInitials(profile) {
-  return (profile?.name || "MC")
+function athleteInitials(profile) {
+  return (profile?.name || "MF")
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() || "")
-    .join("") || "MC";
+    .join("") || "MF";
 }
 
-function renderActionAttributes(item) {
-  if (!item?.action) return 'data-action="go-page" data-page="ia"';
-  const attrs = [`data-action="${escapeHtml(item.action)}"`];
-  if (item.actionPayload?.page) attrs.push(`data-page="${escapeHtml(item.actionPayload.page)}"`);
-  if (item.actionPayload?.tab) attrs.push(`data-tab="${escapeHtml(item.actionPayload.tab)}"`);
-  return attrs.join(" ");
-}
-
-function renderSearchResults(query, results) {
+function renderSearchResults(query, results, shared) {
   if (query.trim().length < 2) {
-    return '<div class="muted">Tape 2 lettres pour retrouver un exercice ou une recette.</div>';
+    return '<div class="command-empty">Trouver un exo, une recette, un badge ou ouvrir un pôle.</div>';
   }
 
-  const items = [
-    ...results.exercises.slice(0, 3).map((exercise) => `
-      <button class="result-row" data-action="open-global-result" data-type="exo" data-id="${escapeHtml(exercise.id)}">
-        <span class="result-row-type">Exo</span>
-        <span class="result-row-copy">
-          <strong>${escapeHtml(exercise.nom)}</strong>
-          <span>${escapeHtml(exercise.pattern)} • ${escapeHtml(exercise.muscle)}</span>
-        </span>
-      </button>
-    `),
-    ...results.recipes.slice(0, 3).map((recipe) => `
-      <button class="result-row" data-action="open-global-result" data-type="recipe" data-id="${escapeHtml(recipe.id)}">
-        <span class="result-row-type">Fuel</span>
-        <span class="result-row-copy">
-          <strong>${escapeHtml(recipe.nom)}</strong>
-          <span>${escapeHtml(recipe.categorie)} • ${recipe.prot} g prot</span>
-        </span>
-      </button>
-    `)
-  ];
+  const normalized = normalizeKey(query);
+  const utilityRows = [];
 
-  return items.length
-    ? `<div class="compact-results">${items.join("")}</div>`
-    : buildEmptyState("Aucun résultat", "Essaie un autre mot-clé ou ouvre directement un pôle.", "", "");
-}
+  if (["stats", "suivi", "progression", "badge", "streak"].some((word) => normalized.includes(word))) {
+    utilityRows.push(`
+      <button class="command-row" data-action="go-page" data-page="history">
+        <span class="command-row-icon">${icon("trend", "", 14)}</span>
+        <span class="command-row-copy">
+          <strong>Ouvrir Suivi</strong>
+          <span>${shared.stats.weekSessions} séances cette semaine • ${shared.stats.streak} jours de streak</span>
+        </span>
+        <span class="command-row-arrow">${icon("chevron", "", 14)}</span>
+      </button>
+    `);
+  }
 
-function currentFocusLabel() {
-  if (state.currentPlan?.title) return state.currentPlan.title;
-  return "Séance du jour à générer";
+  if (["profil", "compte", "poids", normalizeKey(shared.profile.name)].filter(Boolean).some((word) => normalized.includes(word))) {
+    utilityRows.push(`
+      <button class="command-row" data-action="go-settings-tab" data-tab="identity">
+        <span class="command-row-icon">${icon("profile", "", 14)}</span>
+        <span class="command-row-copy">
+          <strong>Ouvrir Profil</strong>
+          <span>${escapeHtml(shared.profile.name || "Profil athlète")} • ${shared.profileCompletion}% complété</span>
+        </span>
+        <span class="command-row-arrow">${icon("chevron", "", 14)}</span>
+      </button>
+    `);
+  }
+
+  if (["ma seance", "seance perso", "personnalisee", "builder"].some((word) => normalized.includes(word))) {
+    utilityRows.push(`
+      <button class="command-row" data-action="go-page" data-page="my-session">
+        <span class="command-row-icon">${icon("target", "", 14)}</span>
+        <span class="command-row-copy">
+          <strong>Ouvrir Ma séance</strong>
+          <span>${shared.focusSession.duration} min • builder manuel + alertes Maya Coach</span>
+        </span>
+        <span class="command-row-arrow">${icon("chevron", "", 14)}</span>
+      </button>
+    `);
+  }
+
+  if (["photo", "progression photo", "avant apres", "frise"].some((word) => normalized.includes(word))) {
+    utilityRows.push(`
+      <button class="command-row" data-action="go-page" data-page="progress">
+        <span class="command-row-icon">${icon("camera", "", 14)}</span>
+        <span class="command-row-copy">
+          <strong>Ouvrir Progression visuelle</strong>
+          <span>Frise visuelle avec photo, date, poids, taille et contexte de prise</span>
+        </span>
+        <span class="command-row-arrow">${icon("chevron", "", 14)}</span>
+      </button>
+    `);
+  }
+
+  const exerciseRows = results.exercises.slice(0, 4).map((exercise) => `
+    <button class="command-row" data-action="open-global-result" data-type="exo" data-id="${escapeHtml(exercise.id)}">
+      <span class="command-row-icon">${icon("dumbbell", "", 14)}</span>
+      <span class="command-row-copy">
+        <strong>${escapeHtml(exercise.nom)}</strong>
+        <span>${escapeHtml(exercise.pattern)} • ${escapeHtml(exercise.muscle)}</span>
+      </span>
+      <span class="command-row-arrow">${icon("chevron", "", 14)}</span>
+    </button>
+  `);
+
+  const recipeRows = results.recipes.slice(0, 3).map((recipe) => `
+    <button class="command-row" data-action="open-global-result" data-type="recipe" data-id="${escapeHtml(recipe.id)}">
+      <span class="command-row-icon">${icon("bowl", "", 14)}</span>
+      <span class="command-row-copy">
+        <strong>${escapeHtml(recipe.nom)}</strong>
+        <span>${recipe.prot} g prot • ${escapeHtml(recipe.categorie)}</span>
+      </span>
+      <span class="command-row-arrow">${icon("chevron", "", 14)}</span>
+    </button>
+  `);
+
+  const rows = [...utilityRows, ...exerciseRows, ...recipeRows];
+  return rows.length ? rows.join("") : buildEmptyState("Aucun résultat", "Essaie un autre mot-clé ou ouvre directement un pôle.", "", "");
 }
 
 export function renderHome(node) {
-  const profile = state.profile || {};
-  const stats = computeDashboardStats();
-  const weightEvolution = getWeightEvolution();
+  const shared = getSharedDashboardData();
   const search = state.globalSearch || "";
   const searchResults = getGlobalSearchResults(search);
-  const topRecommendation = computeCoachRecommendations()[0] || null;
-  const nutritionSuggestion = getTrainingAwareRecipeSuggestions(profile.goal || "maintenance")[0] || null;
-  const latestTraining = state.history.find((entry) => entry.type === "training") || null;
-  const latestEntryLabel = latestTraining ? formatShortDate(latestTraining.date) : "aucune séance";
-  const sessionTarget = Math.max(2, parseInt(profile.frequency || "3", 10));
-  const photoUrl = profile.photoDataUrl || "";
-  const resultsCount = searchResults.exercises.length + searchResults.recipes.length;
+  const photoUrl = shared.profile.photoDataUrl || "";
+  const highlightedRecipe = shared.relatedRecipes[0] || null;
 
   node.innerHTML = `
-    <div class="section compact-shell">
-      <div class="card module-home glow-gold compact-hero">
-        <div class="compact-hero-head">
+    <div class="section home-screen">
+      <div class="home-topline">
+        <div>
+          <div class="eyebrow">Accueil Maya</div>
+          <h2>Vue compacte du jour</h2>
+        </div>
+        <span class="pill">${shared.profile.goal || "muscle"} • ${shared.profile.sessionTime || "35"} min</span>
+      </div>
+
+      <div class="card module-home home-day-card">
+        <div class="native-block-head">
           <div>
-            <div class="eyebrow">Accueil compact</div>
-            <h2>${escapeHtml(currentFocusLabel())}</h2>
-            <p class="muted">Vue iPhone plus dense, orientée séance du jour et suivi rapide.</p>
+            <div class="eyebrow">Séance du jour</div>
+            <h3>${escapeHtml(state.currentPlan ? shared.focusSession.title : "Séance du jour")}</h3>
+            <p class="muted">${escapeHtml(`${shared.focusSession.duration} min • ${shared.focusSession.place} • ${shared.focusSession.goal}`)}</p>
           </div>
-          <button class="icon-btn" data-action="go-page" data-page="settings" title="Profil">⚙</button>
-        </div>
-
-        <div class="compact-identity">
-          <div class="athlete-avatar compact-identity-avatar">
-            ${photoUrl
-              ? `<img class="athlete-avatar-image" src="${photoUrl}" alt="Photo de profil" />`
-              : `<span class="athlete-avatar-fallback">${escapeHtml(getAthleteInitials(profile))}</span>`}
-          </div>
-          <div class="compact-identity-copy">
-            <strong>${escapeHtml(profile.name || "Profil athlète")}</strong>
-            <span>${escapeHtml(getCycleHeadline())}</span>
-            <span>${escapeHtml(weightEvolution.currentWeightKg ? `${weightEvolution.currentWeightKg} kg • ${profile.place || "mixte"}` : "Nom, âge et poids à compléter")}</span>
+          <div class="profile-chip">
+            <div class="profile-chip-avatar">
+              ${photoUrl ? `<img class="athlete-avatar-image" src="${photoUrl}" alt="Photo de profil" />` : `<span>${escapeHtml(athleteInitials(shared.profile))}</span>`}
+            </div>
+            <div class="profile-chip-copy">
+              <strong>${escapeHtml(shared.profile.name || "Profil athlète")}</strong>
+              <span>${shared.profileCompletion}% complété</span>
+            </div>
           </div>
         </div>
 
-        <div class="mini-kpi-row">
-          <div class="mini-kpi-card accent-gold">
-            <span class="mini-kpi-label">Streak</span>
-            <strong class="mini-kpi-value">${stats.streak} j</strong>
-            <span class="mini-kpi-meta">continuité</span>
+        <div class="home-day-grid">
+          <div class="home-day-copy">
+            <div class="session-meta-strip">
+              <span>${icon("target", "", 14)} ${escapeHtml(shared.focusSession.goal)}</span>
+              <span>${icon("dumbbell", "", 14)} ${escapeHtml(shared.focusSession.place)}</span>
+              <span>${icon("timer", "", 14)} ${escapeHtml(shared.focusSession.duration)} min</span>
+            </div>
+            <div class="home-day-highlight">
+              <strong>${escapeHtml(shared.recommendations[0]?.title || "Priorité du jour")}</strong>
+              <span>${escapeHtml(shared.recommendations[0]?.body || "Lance la séance, note ton feedback et laisse MAYA ajuster la suite.")}</span>
+            </div>
+            <div class="home-day-actions">
+              <button class="btn btn-main" data-action="${state.currentPlan ? "start-generated-plan" : "quick-session"}">${state.currentPlan ? "Démarrer la séance prête" : "Séance rapide"}</button>
+              <button class="btn btn-outline" data-action="go-page" data-page="ia">Ouvrir Coach</button>
+            </div>
           </div>
-          <div class="mini-kpi-card accent-blue">
-            <span class="mini-kpi-label">Suivi</span>
-            <strong class="mini-kpi-value">${stats.weekSessions}/${sessionTarget}</strong>
-            <span class="mini-kpi-meta">séances semaine</span>
-          </div>
-          <div class="mini-kpi-card accent-green">
-            <span class="mini-kpi-label">Fuel</span>
-            <strong class="mini-kpi-value">${stats.nutritionRegularity.score}%</strong>
-            <span class="mini-kpi-meta">régularité</span>
-          </div>
-        </div>
 
-        <button class="btn btn-main compact-primary-btn" data-action="quick-session">Lancer la séance du jour</button>
-
-        <div class="support-link-row">
-          <button class="support-link" data-action="go-page" data-page="ia">Préparer avec Coach</button>
-          <button class="support-link" data-action="go-page" data-page="history">Ouvrir mon suivi</button>
+          ${renderProgressRing({
+            value: shared.stats.weekSessions,
+            max: shared.sessionTarget,
+            label: "Rythme semaine",
+            sublabel: `${shared.weekRatio}% de l'objectif`,
+            accent: "gold"
+          })}
         </div>
       </div>
 
-      <div class="compact-module-grid">
-        <div class="card module-stats row-card">
-          <div class="row-card-head">
-            <div>
-              <div class="eyebrow">Priorité coach</div>
-              <div class="row-card-title">${escapeHtml(topRecommendation?.title || "Rythme stable")}</div>
-            </div>
-            <span class="pill pill-calm">${escapeHtml(latestEntryLabel)}</span>
-          </div>
-          <p class="row-card-copy">${escapeHtml(topRecommendation?.body || "Tu peux repartir sur une séance simple ou consulter ton suivi pour voir la tendance.")}</p>
-          <button class="row-action" ${renderActionAttributes(topRecommendation)}>${escapeHtml(topRecommendation?.actionLabel || "Ouvrir le coach")}</button>
+      <div class="mini-kpi-row home-kpi-row">
+        <div class="data-pill-card">
+          <span class="data-pill-label">${icon("fire", "", 14)} Streak</span>
+          <strong class="data-pill-value">${renderCountup(shared.stats.streak, { suffix: "j" })}</strong>
+          <small>${shared.stats.totalSessions} entrées suivies</small>
         </div>
-
-        <div class="card module-nutrition row-card">
-          <div class="row-card-head">
-            <div>
-              <div class="eyebrow">Nutrition</div>
-              <div class="row-card-title">${escapeHtml(nutritionSuggestion?.nom || "Plan jour intelligent")}</div>
-            </div>
-            <span class="pill pill-success">${escapeHtml(profile.goal || "muscle")}</span>
-          </div>
-          <p class="row-card-copy">
-            ${nutritionSuggestion
-              ? `${nutritionSuggestion.temps} min • ${nutritionSuggestion.prot} g prot • ${nutritionSuggestion.tags.slice(0, 2).join(" • ")}`
-              : "Génère un plan jour post-workout aligné avec ta charge du moment."}
-          </p>
-          <button class="row-action" data-action="go-page" data-page="nutrition">Voir le fuel du jour</button>
+        <div class="data-pill-card">
+          <span class="data-pill-label">${icon("bolt", "", 14)} Charge</span>
+          <strong class="data-pill-value">${renderCountup(shared.weekRatio, { suffix: "%" })}</strong>
+          <small>${shared.weeklySummary.trainingSessions}/${shared.sessionTarget} séances</small>
+        </div>
+        <div class="data-pill-card">
+          <span class="data-pill-label">${icon("moon", "", 14)} Recovery</span>
+          <strong class="data-pill-value">${renderCountup(shared.recoveryScore, { suffix: "%" })}</strong>
+          <small>${shared.fuelRatio}% de régularité nutrition</small>
         </div>
       </div>
 
-      <div class="card module-stats compact-search-card">
-        <div class="row-card-head">
+      <div class="card command-surface">
+        <div class="native-block-head">
           <div>
-            <div class="eyebrow">Recherche</div>
-            <div class="row-card-title">Trouver vite</div>
+            <div class="eyebrow">Recherche rapide</div>
+            <h3>Command center</h3>
           </div>
-          <span class="pill">${search.trim().length >= 2 ? `${resultsCount} résultat${resultsCount > 1 ? "s" : ""}` : "exos + recettes"}</span>
+          <span class="pill">${search.trim().length >= 2 ? `${searchResults.exercises.length + searchResults.recipes.length} résultats` : "exos • recettes • suivi • profil"}</span>
         </div>
 
-        <div class="search-shell compact-search-shell">
-          <span class="search-icon" aria-hidden="true">⌕</span>
-          <input id="globalSearch" class="search-input" type="text" placeholder="traction, curry, hip thrust..." value="${escapeHtml(search)}" />
-          <button class="search-clear ${search ? "visible" : ""}" data-action="clear-global-search">Effacer</button>
+        <div class="command-shell">
+          <span class="command-icon">${icon("search", "", 16)}</span>
+          <input id="globalSearch" class="command-input" type="text" placeholder="Traction, progression, curry..." value="${escapeHtml(search)}" />
+          <button class="command-clear ${search ? "visible" : ""}" data-action="clear-global-search">Effacer</button>
         </div>
 
-        <div class="search-shortcuts compact-shortcuts">
-          <button class="shortcut-chip" data-action="go-page" data-page="exos">Exercices</button>
-          <button class="shortcut-chip" data-action="go-page" data-page="history">Suivi</button>
-          <button class="shortcut-chip" data-action="go-page" data-page="nutrition">Nutrition</button>
-          <button class="shortcut-chip" data-action="go-settings-tab" data-tab="profile">Profil</button>
+        <div class="quick-action-row">
+          <button class="quick-action" data-action="go-page" data-page="ia">${icon("coach", "", 14)} Coach</button>
+          <button class="quick-action" data-action="go-page" data-page="my-session">${icon("target", "", 14)} Ma séance</button>
+          <button class="quick-action" data-action="go-page" data-page="exos">${icon("dumbbell", "", 14)} Exercices</button>
+          <button class="quick-action" data-action="go-page" data-page="history">${icon("trend", "", 14)} Suivi</button>
+          <button class="quick-action" data-action="go-page" data-page="nutrition">${icon("bowl", "", 14)} Nutrition</button>
+          <button class="quick-action" data-action="go-page" data-page="progress">${icon("camera", "", 14)} Progression visuelle</button>
         </div>
 
-        ${renderSearchResults(search, searchResults)}
+        <div class="command-results">${renderSearchResults(search, searchResults, shared)}</div>
+      </div>
+
+      <div class="home-secondary-grid">
+        <div class="card module-stats compact-feed-card">
+          <div class="native-block-head">
+            <div>
+              <div class="eyebrow">Feed vivant</div>
+              <h3>Ce qui bouge</h3>
+            </div>
+            <button class="ghost-link" data-action="go-page" data-page="history">Tout voir</button>
+          </div>
+          ${renderAnimatedFeed(shared.feedItems)}
+        </div>
+
+        <div class="card module-nutrition compact-fuel-card">
+          <div class="native-block-head">
+            <div>
+              <div class="eyebrow">Fuel du jour</div>
+              <h3>Recettes alignées</h3>
+            </div>
+            <button class="ghost-link" data-action="go-page" data-page="nutrition">Explorer</button>
+          </div>
+          ${highlightedRecipe ? `
+            <div class="recipe-highlight-card">
+              <strong>${escapeHtml(highlightedRecipe.nom)}</strong>
+              <span>${highlightedRecipe.calories} kcal • ${highlightedRecipe.prot} g prot • ${escapeHtml(highlightedRecipe.moment)}</span>
+            </div>
+          ` : ""}
+          <div class="recipe-carousel">
+            ${shared.relatedRecipes.slice(0, 4).map((recipe) => `
+              <button class="recipe-mini-card" data-action="open-global-result" data-type="recipe" data-id="${escapeHtml(recipe.id)}">
+                <strong>${escapeHtml(recipe.nom)}</strong>
+                <span>${recipe.calories} kcal • ${recipe.prot} g prot</span>
+                <small>${escapeHtml(recipe.tags.slice(0, 2).join(" • "))}</small>
+              </button>
+            `).join("")}
+          </div>
+        </div>
       </div>
     </div>
   `;

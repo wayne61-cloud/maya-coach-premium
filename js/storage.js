@@ -5,11 +5,18 @@ export const STORAGE_KEYS = {
   nutritionHistory: "maya_nutrition_history_v1",
   feedbackTrend: "maya_feedback_trend_v2",
   aiConfig: "maya_ai_config_v2",
+  flowiseConfig: "maya_flowise_config_v1",
   profile: "maya_profile_v1",
   profileSnapshots: "maya_profile_snapshots_v1",
   cycleState: "maya_cycle_state_v1",
   syncConfig: "maya_sync_config_v2",
-  notificationConfig: "maya_notification_config_v1"
+  notificationConfig: "maya_notification_config_v1",
+  supabaseConfig: "maya_supabase_config_v1",
+  authState: "maya_auth_state_v1",
+  customWorkoutDraft: "maya_custom_workout_draft_v1",
+  visualProgressEntries: "maya_visual_progress_entries_v1",
+  previewUsers: "maya_preview_users_v1",
+  previewSession: "maya_preview_session_v1"
 };
 
 export function loadJSON(key, fallback) {

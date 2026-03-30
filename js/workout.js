@@ -1,6 +1,7 @@
-import { EXO_BY_ID, EXOS, getSimilarExercises, zoneMuscles } from "./catalog.js";
+import { EXO_BY_ID, EXOS, getExercisesByPlace, getNoushiChallengeVariant, getSimilarExercises, matchesPlace, zoneMuscles } from "./catalog.js";
+import { estimateDuration } from "./ai.js";
 import { scheduleAutoSync } from "./sync.js";
-import { defaultCustomWorkoutDraft, state, persistCycleState, persistFeedbackTrend, persistHistory } from "./state.js";
+import { defaultCustomWorkoutDraft, setCustomWorkoutLibraryState, state, persistCycleState, persistFeedbackTrend, persistHistory } from "./state.js";
 import { getNutritionRegularity } from "./nutrition.js";
 import { average, clamp, dayKey, formatShortDate, parseDurationToken, parseRepsValue, sameWeek, sum, uid } from "./utils.js";
 
@@ -97,7 +98,7 @@ export function buildMinimalPlanAroundExercise(exerciseId) {
     title: `Focus ${focusExercise.nom}`,
     inputs: {
       time: parseInt(state.profile?.sessionTime || "30", 10),
-      place: focusExercise.pole === "mixte" ? "maison" : focusExercise.pole,
+      place: focusExercise.pole === "mixte" ? (state.profile?.place || defaultCustomWorkoutDraft.place) : focusExercise.pole,
       zone: zoneKey,
       goal: focusExercise.objectif[0] || "muscle",
       energy: "normal",
@@ -163,12 +164,174 @@ function inferZoneFromBlocks(blocks) {
   return "full";
 }
 
+function pickExerciseForPlace(place, usedExerciseIds = new Set(), preferredMuscle = "") {
+  const pool = getExercisesByPlace(place || "mixte");
+  return pool.find((exercise) => preferredMuscle && exercise.muscle === preferredMuscle && !usedExerciseIds.has(exercise.id))
+    || pool.find((exercise) => !usedExerciseIds.has(exercise.id))
+    || pool[0]
+    || EXOS[0];
+}
+
+function buildCustomWorkoutSessionId() {
+  return `session_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
+export function normalizeCustomWorkoutDraftForPlace(draft = state.customWorkoutDraft, place = draft?.place || defaultCustomWorkoutDraft.place) {
+  const nextPlace = ["maison", "salle", "mixte"].includes(place) ? place : defaultCustomWorkoutDraft.place;
+  const base = {
+    ...structuredClone(defaultCustomWorkoutDraft),
+    ...(draft || {}),
+    place: nextPlace
+  };
+  const targetExerciseCount = clamp(parseInt(base.targetExerciseCount, 10) || 0, 1, 12);
+  const usedExerciseIds = new Set();
+  const blocks = (base.blocks || []).slice(0, 12).map((block, index) => {
+    const currentExercise = EXO_BY_ID.get(block.exerciseId);
+    const nextExercise = currentExercise && matchesPlace(currentExercise, nextPlace)
+      ? currentExercise
+      : pickExerciseForPlace(nextPlace, usedExerciseIds, currentExercise?.muscle);
+    if (nextExercise) usedExerciseIds.add(nextExercise.id);
+    return {
+      id: String(block.id || `block_${index + 1}`),
+      exerciseId: nextExercise?.id || "pushup_classic",
+      sets: String(block.sets || "3"),
+      reps: String(block.reps || inferRepsGuess(nextExercise || EXOS[0]) || "10-12"),
+      restSec: String(block.restSec || exerciseRestGuess(nextExercise || EXOS[0]) || "60")
+    };
+  });
+
+  while (blocks.length < targetExerciseCount) {
+    const nextExercise = pickExerciseForPlace(nextPlace, usedExerciseIds);
+    if (nextExercise) usedExerciseIds.add(nextExercise.id);
+    blocks.push({
+      id: `block_${Date.now().toString(36)}_${blocks.length + 1}`,
+      exerciseId: nextExercise?.id || "pushup_classic",
+      sets: "3",
+      reps: inferRepsGuess(nextExercise || EXOS[0]) || "10-12",
+      restSec: String(exerciseRestGuess(nextExercise || EXOS[0]) || "60")
+    });
+  }
+
+  return {
+    ...base,
+    id: String(base.id || buildCustomWorkoutSessionId()),
+    place: nextPlace,
+    targetExerciseCount: String(targetExerciseCount),
+    blocks: (blocks.length ? blocks : structuredClone(defaultCustomWorkoutDraft.blocks)).slice(0, targetExerciseCount)
+  };
+}
+
+export function setActiveCustomWorkoutSession(sessionId) {
+  const sessions = Array.isArray(state.customWorkoutLibrary) ? state.customWorkoutLibrary : [];
+  const target = sessions.find((session) => session.id === sessionId);
+  if (!target) return null;
+  return setCustomWorkoutLibraryState({
+    sessions,
+    activeId: target.id
+  });
+}
+
+export function createCustomWorkoutSession(seed = {}) {
+  const nextSession = normalizeCustomWorkoutDraftForPlace({
+    ...structuredClone(defaultCustomWorkoutDraft),
+    id: seed.id || buildCustomWorkoutSessionId(),
+    title: seed.title || `Ma séance ${((state.customWorkoutLibrary || []).length || 0) + 1}`,
+    blocks: seed.blocks || structuredClone(defaultCustomWorkoutDraft.blocks),
+    ...seed
+  }, seed.place || state.profile?.place || defaultCustomWorkoutDraft.place);
+
+  return setCustomWorkoutLibraryState({
+    sessions: [...(state.customWorkoutLibrary || []), nextSession],
+    activeId: nextSession.id
+  });
+}
+
+export function removeCustomWorkoutSession(sessionId) {
+  const sessions = (state.customWorkoutLibrary || []).filter((session) => session.id !== sessionId);
+  if (!sessions.length) {
+    return setCustomWorkoutLibraryState({
+      sessions: [
+        normalizeCustomWorkoutDraftForPlace({
+          ...structuredClone(defaultCustomWorkoutDraft),
+          id: buildCustomWorkoutSessionId(),
+          place: state.profile?.place || defaultCustomWorkoutDraft.place
+        }, state.profile?.place || defaultCustomWorkoutDraft.place)
+      ]
+    });
+  }
+  const fallbackId = state.activeCustomWorkoutId === sessionId ? sessions[0].id : state.activeCustomWorkoutId;
+  return setCustomWorkoutLibraryState({
+    sessions,
+    activeId: fallbackId
+  });
+}
+
+export function setCustomWorkoutDraft(nextDraft) {
+  const baseId = nextDraft?.id || state.activeCustomWorkoutId || state.customWorkoutDraft?.id || buildCustomWorkoutSessionId();
+  const normalizedDraft = normalizeCustomWorkoutDraftForPlace(
+    { ...(state.customWorkoutDraft || defaultCustomWorkoutDraft), ...(nextDraft || {}), id: baseId },
+    nextDraft?.place || state.customWorkoutDraft?.place || defaultCustomWorkoutDraft.place
+  );
+  const existingSessions = Array.isArray(state.customWorkoutLibrary) ? state.customWorkoutLibrary : [];
+  const nextSessions = existingSessions.some((session) => session.id === normalizedDraft.id)
+    ? existingSessions.map((session) => session.id === normalizedDraft.id ? normalizedDraft : session)
+    : [...existingSessions, normalizedDraft];
+  return setCustomWorkoutLibraryState({
+    sessions: nextSessions,
+    activeId: normalizedDraft.id
+  });
+}
+
+export function appendExerciseToCustomWorkout(exerciseId, sessionId = state.activeCustomWorkoutId) {
+  const exercise = EXO_BY_ID.get(exerciseId);
+  if (!exercise) return null;
+  const targetSession = (state.customWorkoutLibrary || []).find((session) => session.id === sessionId) || state.customWorkoutDraft;
+  if (!targetSession) return null;
+
+  const currentDraft = normalizeCustomWorkoutDraftForPlace(
+    targetSession,
+    targetSession?.place || exercise.pole || state.profile?.place || defaultCustomWorkoutDraft.place
+  );
+  const usedExerciseIds = new Set((currentDraft.blocks || []).map((block) => block.exerciseId));
+  const nextPlace = currentDraft.place === "mixte"
+    ? "mixte"
+    : matchesPlace(exercise, currentDraft.place)
+      ? currentDraft.place
+      : exercise.pole === "mixte"
+        ? currentDraft.place
+        : exercise.pole;
+
+  return setCustomWorkoutDraft({
+    ...currentDraft,
+    id: currentDraft.id,
+    place: nextPlace,
+    targetExerciseCount: String(Math.max(parseInt(currentDraft.targetExerciseCount, 10) || 1, usedExerciseIds.has(exercise.id) ? currentDraft.blocks.length : currentDraft.blocks.length + 1)),
+    blocks: usedExerciseIds.has(exercise.id)
+      ? currentDraft.blocks
+      : [
+          ...(currentDraft.blocks || []),
+          {
+            id: `block_${Date.now()}`,
+            exerciseId: exercise.id,
+            sets: exercise.niveau >= 3 ? "4" : "3",
+            reps: inferRepsGuess(exercise),
+            restSec: String(exerciseRestGuess(exercise))
+          }
+        ]
+  });
+}
+
 export function buildCustomPlanFromDraft(draft = state.customWorkoutDraft) {
-  const rawBlocks = Array.isArray(draft?.blocks) ? draft.blocks : [];
+  const normalizedDraft = normalizeCustomWorkoutDraftForPlace(
+    draft,
+    draft?.place || state.profile?.place || defaultCustomWorkoutDraft.place
+  );
+  const rawBlocks = Array.isArray(normalizedDraft?.blocks) ? normalizedDraft.blocks : [];
   const blocks = rawBlocks
     .map((block) => {
       const exercise = EXO_BY_ID.get(block.exerciseId);
       if (!exercise) return null;
+      if (!matchesPlace(exercise, normalizedDraft.place)) return null;
       const sets = clamp(parseInt(block.sets, 10) || 0, 1, 8);
       const restSec = clamp(parseInt(block.restSec, 10) || 0, 20, 240);
       const reps = String(block.reps || "").trim();
@@ -188,12 +351,12 @@ export function buildCustomPlanFromDraft(draft = state.customWorkoutDraft) {
   const plan = {
     id: uid("plan"),
     createdAt: new Date().toISOString(),
-    title: String(draft?.title || "Séance personnalisée").trim() || "Séance personnalisée",
+    title: String(normalizedDraft?.title || "Séance personnalisée").trim() || "Séance personnalisée",
     inputs: {
       time: 0,
-      place: draft?.place || state.profile?.place || "maison",
+      place: normalizedDraft?.place || state.profile?.place || defaultCustomWorkoutDraft.place,
       zone: inferZoneFromBlocks(blocks),
-      goal: draft?.objective || state.profile?.goal || "muscle",
+      goal: normalizedDraft?.objective || state.profile?.goal || "muscle",
       energy: "normal",
       level: state.profile?.level || "2",
       cycleWeek: state.cycleState.cycleWeek,
@@ -212,8 +375,98 @@ export function buildCustomPlanFromDraft(draft = state.customWorkoutDraft) {
   return plan;
 }
 
-export function resetCustomWorkoutDraft() {
-  state.customWorkoutDraft = structuredClone(defaultCustomWorkoutDraft);
+export function resetCustomWorkoutDraft(seed = {}) {
+  const nextPlace = seed.place || state.customWorkoutDraft?.place || state.profile?.place || defaultCustomWorkoutDraft.place;
+  return setCustomWorkoutDraft({
+    ...structuredClone(defaultCustomWorkoutDraft),
+    id: state.activeCustomWorkoutId || state.customWorkoutDraft?.id || buildCustomWorkoutSessionId(),
+    ...seed,
+    place: nextPlace
+  });
+}
+
+export function getCustomWorkoutMetrics(draft = state.customWorkoutDraft) {
+  const normalizedDraft = normalizeCustomWorkoutDraftForPlace(
+    draft,
+    draft?.place || state.profile?.place || defaultCustomWorkoutDraft.place
+  );
+  const exercises = (normalizedDraft.blocks || [])
+    .map((block) => EXO_BY_ID.get(block.exerciseId))
+    .filter(Boolean);
+  const rests = (normalizedDraft.blocks || []).map((block) => parseInt(block.restSec, 10)).filter(Number.isFinite);
+  const plan = buildCustomPlanFromDraft(normalizedDraft);
+  return {
+    draft: normalizedDraft,
+    plan,
+    exercises,
+    averageLevel: exercises.length ? average(exercises.map((exercise) => exercise.niveau || 1)) : 0,
+    averageRest: rests.length ? Math.round(average(rests)) : 0,
+    totalSets: sum((normalizedDraft.blocks || []).map((block) => parseInt(block.sets, 10) || 0)),
+    hardCount: exercises.filter((exercise) => exercise.niveau >= 3).length,
+    muscleCount: new Set(exercises.map((exercise) => exercise.muscle)).size,
+    patternCount: new Set(exercises.map((exercise) => exercise.pattern)).size
+  };
+}
+
+export function buildCustomWorkoutCoachAlerts(draft = state.customWorkoutDraft) {
+  const metrics = getCustomWorkoutMetrics(draft);
+  const alerts = [];
+
+  if (!metrics.exercises.length) {
+    return [{
+      id: "empty",
+      tone: "calm",
+      title: "Maya attend ton premier exercice",
+      body: "Ajoute un bloc pour que Maya Coach lise l’intensité, la densité et l’équilibre de ta séance."
+    }];
+  }
+
+  if (metrics.hardCount >= 2 && metrics.averageRest < 90) {
+    alerts.push({
+      id: "rest-up",
+      tone: "alert",
+      title: "Monte le repos sur les blocs les plus durs",
+      body: `Ta séance contient ${metrics.hardCount} exercice(s) très exigeant(s). Maya Coach conseille 90 à 140 secondes de repos pour garder une vraie qualité d’exécution.`
+    });
+  }
+
+  if (metrics.totalSets >= 18 || (metrics.plan?.estimatedDurationMin || 0) > 50) {
+    alerts.push({
+      id: "density-down",
+      tone: "warn",
+      title: "Densité haute détectée",
+      body: `En l’état, la séance part sur ${metrics.totalSets} séries et environ ${metrics.plan?.estimatedDurationMin || 0} minutes. Coupe un bloc ou répartis-la sur deux jours si tu veux rester explosif.`
+    });
+  }
+
+  if (metrics.muscleCount <= 1 && metrics.exercises.length >= 3) {
+    alerts.push({
+      id: "balance",
+      tone: "warn",
+      title: "Séance très mono-zone",
+      body: "Tu attaques presque toujours le même groupe. Ajoute un antagoniste ou du gainage pour mieux tenir la qualité globale et protéger la récup."
+    });
+  }
+
+  if ((metrics.draft.objective || "muscle") === "force" && metrics.averageRest < 110) {
+    alerts.push({
+      id: "force-rest",
+      tone: "info",
+      title: "Objectif force = repos plus long",
+      body: "Pour pousser plus lourd, Maya Coach recommande de rallonger les récupérations plutôt que d’empiler des reps fatiguées."
+    });
+  }
+
+  if (!alerts.length) {
+    alerts.push({
+      id: "ready",
+      tone: "success",
+      title: "Séance propre et exploitable",
+      body: `Structure cohérente: ${metrics.exercises.length} exercice(s), ${metrics.totalSets} séries et un niveau moyen ${metrics.averageLevel.toFixed(1)}/3. Tu peux la lancer telle quelle.`
+    });
+  }
+
+  return alerts.slice(0, 4);
 }
 
 function findPreviousExercisePerformance(exerciseId) {
@@ -423,6 +676,11 @@ function updateCycleAfterTraining() {
 }
 
 function buildCoachNote(entry) {
+  if (entry.metadata?.noushiMode) {
+    return entry.difficulty === "tenue"
+      ? "NOUSHI terminé. Tu as tenu toute la séance: badge spécial en approche dans le suivi."
+      : "NOUSHI t’a stoppé avant la ligne. Reviens plus frais et plus propre."
+  }
   if (entry.trainingLoad === "high") {
     return "Séance dense. Priorité récupération, hydratation et repas post-workout protéiné.";
   }
@@ -475,7 +733,9 @@ export function finishWorkout(forceStop = false) {
     id: uid("session"),
     date: new Date().toISOString(),
     title: plan.title,
-    source: plan.inputs?.manual
+    source: plan.metadata?.noushiMode || plan.inputs?.noushiMode
+      ? "noushi-mode"
+      : plan.inputs?.manual
       ? "manual"
       : plan.inputs?.quick
         ? "quick"
@@ -485,7 +745,7 @@ export function finishWorkout(forceStop = false) {
     type: "training",
     objective: plan.inputs?.goal || "muscle",
     zone: plan.inputs?.zone || "full",
-    place: plan.inputs?.place || "maison",
+    place: plan.inputs?.place || defaultCustomWorkoutDraft.place,
     equipmentUsed: [...new Set(plan.blocks.map((block) => EXO_BY_ID.get(block.exerciseId)?.equipement || "Aucun"))],
     durationMin: plan.estimatedDurationMin || plan.inputs?.time || durationRealMin,
     durationRealMin,
@@ -560,6 +820,83 @@ export function createProtocolHistoryEntry(kind, item) {
   persistHistory();
   scheduleAutoSync();
   return entry;
+}
+
+export function buildNoushiChallengePlan(challengeId, requestedPlace = "mixte") {
+  const challenge = getNoushiChallengeVariant(challengeId, requestedPlace);
+  if (!challenge) return null;
+
+  const blocks = (challenge.exercises || [])
+    .map((exercise, index) => {
+      const reps = exercise.pattern === "core"
+        ? "35s"
+        : exercise.pattern === "carry"
+          ? "40s"
+          : exercise.objectif.includes("force")
+            ? "5-6"
+            : exercise.niveau >= 3
+              ? "6-8"
+              : "8-10";
+      const restSec = Math.max(exerciseRestGuess(exercise), exercise.niveau >= 3 ? 95 : 80) + (index === 0 ? 20 : 0);
+      return {
+        exerciseId: exercise.id,
+        sets: index < 2 ? 4 : 3,
+        reps,
+        restSec,
+        tempo: exercise.tempo
+      };
+    })
+    .filter(Boolean);
+
+  if (!blocks.length) return null;
+
+  const plan = {
+    id: uid("plan"),
+    createdAt: new Date().toISOString(),
+    title: `NOUSHI • ${challenge.nom}`,
+    inputs: {
+      time: challenge.temps || 40,
+      place: challenge.effectivePlace || challenge.place || "mixte",
+      zone: challenge.zone || "full",
+      goal: challenge.objectif || "force",
+      energy: "high",
+      level: "3",
+      cycleWeek: state.cycleState.cycleWeek,
+      noushiMode: true
+    },
+    warmup: [
+      "3 min montée de température",
+      String(challenge.prep || "Activation spécifique haute tension"),
+      "1 série technique par mouvement principal"
+    ],
+    blocks,
+    finisher: "Aucun confort: marche lente, respiration contrôlée et feedback immédiat.",
+    coachReasoning: [
+      String(challenge.promesse || "Défi NOUSHI à forte exigence technique."),
+      String(challenge.mantra || "Tu es venu pour finir la séance complète."),
+      "Le badge spécial se débloque uniquement si la séance est tenue sans abandon."
+    ],
+    estimatedDurationMin: 0
+  };
+  plan.estimatedDurationMin = estimateDuration(plan);
+  plan.metadata = {
+    dominantPattern: challenge.zone || "full",
+    objective: challenge.objectif || "force",
+    totalSets: sum(blocks.map((block) => block.sets)),
+    fatigueLoad: 94,
+    coherenceScore: 96,
+    cycleWeek: state.cycleState.cycleWeek,
+    noushiMode: true,
+    badgeKey: "noushi-complete",
+    challengeId: challenge.id,
+    challengePlace: challenge.effectivePlace || challenge.place || "mixte",
+    justification: [
+      `Challenge ${challenge.nom} prêt.`,
+      challenge.mantra || "Reste propre malgré la fatigue.",
+      "Badge spécial lié à la complétion intégrale."
+    ]
+  };
+  return plan;
 }
 
 export function applyFeedback(entryId, feedback) {

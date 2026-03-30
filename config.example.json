@@ -1,0 +1,27 @@
+{
+  "product": {
+    "name": "MAYA Fitness",
+    "supportEmail": "support@maya.fitness"
+  },
+  "auth": {
+    "previewEnabled": false,
+    "adminEmails": [
+      "wayne61@hotmail.fr"
+    ]
+  },
+  "services": {
+    "supabase": {
+      "enabled": true,
+      "url": "https://YOUR_PROJECT.supabase.co",
+      "anonKey": "YOUR_SUPABASE_ANON_KEY",
+      "avatarBucket": "avatars",
+      "progressBucket": "progress-photos"
+    },
+    "flowise": {
+      "enabled": false,
+      "apiHost": "",
+      "chatflowId": "",
+      "version": "latest"
+    }
+  }
+}

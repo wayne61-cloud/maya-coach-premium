@@ -1,0 +1,1513 @@
+import {
+  getAdminEmails,
+  getSupabaseProductConfig,
+  hasSupabaseProductConfig,
+  isPreviewAuthEnabled
+} from "./app-config.js";
+import { buildBadgeCollection, getSharedDashboardData } from "./insights.js";
+import {
+  STORAGE_KEYS,
+  loadJSON,
+  removeJSON,
+  saveJSON
+} from "./storage.js";
+import {
+  defaultCustomWorkoutDraft,
+  defaultProfile,
+  persistAuthState,
+  persistCustomWorkoutDraft,
+  persistCycleState,
+  persistFavorites,
+  persistFeedbackTrend,
+  persistHistory,
+  persistNutritionHistory,
+  persistNutritionProfile,
+  persistProfile,
+  persistProfileSnapshots,
+  persistSupabaseConfig,
+  persistVisualProgressEntries,
+  resetPhotoProgressDraft,
+  setCustomWorkoutLibraryState,
+  sanitizeAuthState,
+  sanitizeProfile,
+  sanitizeSupabaseConfig,
+  state
+} from "./state.js";
+import { dayKey } from "./utils.js";
+
+const SUPABASE_BROWSER_MODULE = "https://esm.sh/@supabase/supabase-js@2?bundle";
+
+let supabaseClientPromise = null;
+let authListenerBound = false;
+let profileRowCache = null;
+
+function isConfiguredAdminEmail(email) {
+  const safeEmail = String(email || "").trim().toLowerCase();
+  return getAdminEmails().map((item) => String(item || "").trim().toLowerCase()).includes(safeEmail);
+}
+
+function publicSupabaseState(partialConfig = {}) {
+  const productConfig = getSupabaseProductConfig();
+  state.supabaseConfig = sanitizeSupabaseConfig({
+    ...(state.supabaseConfig || {}),
+    enabled: Boolean(productConfig.enabled),
+    schemaReady: true,
+    ...partialConfig
+  });
+  persistSupabaseConfig();
+  return state.supabaseConfig;
+}
+
+function setAuthState(partialAuth) {
+  state.authState = sanitizeAuthState({
+    ...(state.authState || {}),
+    ...partialAuth,
+    initialized: true
+  });
+  persistAuthState();
+  return state.authState;
+}
+
+function profileFromUser(user) {
+  const displayName = user?.user_metadata?.display_name
+    || user?.user_metadata?.name
+    || state.profile?.name
+    || "";
+
+  return {
+    id: user?.id || "",
+    email: user?.email || "",
+    displayName,
+    mode: hasSupabaseProductConfig() ? "supabase" : "preview"
+  };
+}
+
+function defaultFeedbackTrend() {
+  return { loadAdjust: 0, history: [] };
+}
+
+function defaultCycleState() {
+  return { cycleWeek: 1, sessionsInWeek: 0, cycleLength: 4 };
+}
+
+function resetUserScopedState({ preserveProfileName = "" } = {}) {
+  state.profile = preserveProfileName
+    ? sanitizeProfile({ ...defaultProfile, name: preserveProfileName })
+    : null;
+  state.profilePhotoPreview = "";
+  state.profileSnapshots = [];
+  state.favorites = new Set();
+  state.history = [];
+  state.nutritionProfile = null;
+  state.nutritionHistory = [];
+  state.feedbackTrend = defaultFeedbackTrend();
+  state.cycleState = defaultCycleState();
+  setCustomWorkoutLibraryState({
+    sessions: [
+      {
+        ...structuredClone(defaultCustomWorkoutDraft),
+        id: `session_${Date.now().toString(36)}`,
+        place: state.profile?.place || defaultProfile.place
+      }
+    ]
+  });
+  state.customWorkoutSearch = "";
+  state.customWorkoutPendingExerciseId = "";
+  state.visualProgressEntries = [];
+  resetPhotoProgressDraft();
+  state.currentPlan = null;
+  state.workout = null;
+  state.postWorkoutId = null;
+  state.globalSearch = "";
+  state.exoFilter = { search: "", mode: "all", muscle: "all", similarTo: "" };
+  state.nutritionFilter = { search: "", category: "all", goal: "all", tag: "all" };
+  state.showOnboarding = true;
+  state.onboardingStep = 0;
+  state.syncRuntime = { status: "idle", lastSyncAt: "", error: "" };
+  state.adminRuntime = {
+    users: [],
+    photos: [],
+    filter: "",
+    selectedProfileId: "",
+    statusFilter: "all",
+    loading: false,
+    error: "",
+    lastFetchedAt: ""
+  };
+
+  persistProfile();
+  persistProfileSnapshots();
+  persistFavorites();
+  persistHistory();
+  persistNutritionProfile();
+  persistNutritionHistory();
+  persistFeedbackTrend();
+  persistCycleState();
+  persistVisualProgressEntries();
+}
+
+function persistAllUserState() {
+  persistProfile();
+  persistProfileSnapshots();
+  persistFavorites();
+  persistHistory();
+  persistNutritionProfile();
+  persistNutritionHistory();
+  persistFeedbackTrend();
+  persistCycleState();
+  persistCustomWorkoutDraft();
+  persistVisualProgressEntries();
+}
+
+function loadPreviewUsers() {
+  const users = loadJSON(STORAGE_KEYS.previewUsers, []);
+  return Array.isArray(users) ? users : [];
+}
+
+function savePreviewUsers(users) {
+  saveJSON(STORAGE_KEYS.previewUsers, users);
+}
+
+function savePreviewSession(session) {
+  saveJSON(STORAGE_KEYS.previewSession, session);
+}
+
+function clearPreviewSession() {
+  removeJSON(STORAGE_KEYS.previewSession);
+}
+
+function setAuthenticatedUser({ session, user, mode, notice = "", error = "" }) {
+  const currentUser = profileFromUser(user);
+  currentUser.mode = mode;
+  state.session = session;
+  state.currentUser = currentUser;
+  setAuthState({
+    status: "ready",
+    mode,
+    error,
+    notice
+  });
+  return currentUser;
+}
+
+function setSignedOutState({ mode = "preview", error = "", notice = "" } = {}) {
+  state.session = null;
+  state.currentUser = null;
+  state.authScreenMode = "login";
+  profileRowCache = null;
+  setAuthState({
+    status: "signed_out",
+    mode,
+    error,
+    notice
+  });
+}
+
+async function loadSupabaseFactory() {
+  const module = await import(SUPABASE_BROWSER_MODULE);
+  return module.createClient;
+}
+
+export async function getSupabaseClient() {
+  if (!hasSupabaseProductConfig()) {
+    throw new Error("Supabase n’est pas configuré dans l’app");
+  }
+  if (!supabaseClientPromise) {
+    supabaseClientPromise = loadSupabaseFactory().then((createClient) => {
+      const config = getSupabaseProductConfig();
+      return createClient(config.url, config.anonKey, {
+        auth: {
+          autoRefreshToken: true,
+          persistSession: true,
+          detectSessionInUrl: true
+        },
+        global: {
+          headers: {
+            "X-Client-Info": "maya-fitness-web"
+          }
+        }
+      });
+    });
+  }
+  return supabaseClientPromise;
+}
+
+function previewUserFromRecord(record) {
+  return {
+    id: record.id,
+    email: record.email,
+    user_metadata: {
+      display_name: record.displayName || ""
+    }
+  };
+}
+
+function findPreviewUserByEmail(email) {
+  return loadPreviewUsers().find((user) => user.email.toLowerCase() === String(email || "").toLowerCase()) || null;
+}
+
+async function applyPreviewSession(sessionRecord) {
+  const previewUser = findPreviewUserByEmail(sessionRecord?.email);
+  if (!previewUser) {
+    clearPreviewSession();
+    setSignedOutState({
+      mode: "preview",
+      notice: "Aucune session locale active."
+    });
+    return null;
+  }
+
+  const user = previewUserFromRecord(previewUser);
+  const currentUser = setAuthenticatedUser({
+    session: sessionRecord,
+    user,
+    mode: "preview",
+    notice: "Mode local actif."
+  });
+  if (!state.profile) {
+    state.profile = sanitizeProfile({ ...defaultProfile, name: currentUser.displayName || "" });
+    persistProfile();
+  }
+  state.showOnboarding = !Boolean(state.profile?.name || state.profile?.weightKg);
+  return currentUser;
+}
+
+function buildProfilePayload(profile, currentUser, photoPath = "", existingRow = null) {
+  const isAdminEmail = isConfiguredAdminEmail(currentUser?.email);
+  const role = isAdminEmail
+    ? "admin"
+    : (existingRow?.role || profile?.role || defaultProfile.role);
+  const accountStatus = existingRow?.account_status
+    || (isAdminEmail ? "active" : "pending");
+  return {
+    auth_user_id: currentUser.id,
+    email: currentUser.email || null,
+    name: profile?.name || currentUser.displayName || "",
+    age: profile?.age ? parseInt(profile.age, 10) : null,
+    weight_kg: profile?.weightKg ? Number(profile.weightKg) : null,
+    role,
+    account_status: accountStatus,
+    goal: profile?.goal || defaultProfile.goal,
+    level: profile?.level || defaultProfile.level,
+    frequency: profile?.frequency || defaultProfile.frequency,
+    place: profile?.place || defaultProfile.place,
+    session_time: profile?.sessionTime || defaultProfile.sessionTime,
+    preferred_split: profile?.preferredSplit || defaultProfile.preferredSplit,
+    food_preference: profile?.foodPreference || defaultProfile.foodPreference,
+    recovery_preference: profile?.recoveryPreference || defaultProfile.recoveryPreference,
+    coach_tone: profile?.coachTone || defaultProfile.coachTone,
+    photo_path: photoPath || null,
+    updated_at: new Date().toISOString()
+  };
+}
+
+async function uploadProfilePhoto(client, currentUser) {
+  const photoDataUrl = state.profile?.photoDataUrl || "";
+  const bucket = getSupabaseProductConfig().avatarBucket || "avatars";
+  if (!photoDataUrl.startsWith("data:image/")) {
+    return state.profile?.photoDataUrl || "";
+  }
+
+  try {
+    const response = await fetch(photoDataUrl);
+    const blob = await response.blob();
+    const filePath = `${currentUser.id}/avatar.jpg`;
+    const { error: uploadError } = await client.storage
+      .from(bucket)
+      .upload(filePath, blob, {
+        upsert: true,
+        contentType: "image/jpeg"
+      });
+
+    if (uploadError) {
+      return photoDataUrl;
+    }
+
+    const { data } = client.storage.from(bucket).getPublicUrl(filePath);
+    return data?.publicUrl || filePath;
+  } catch {
+    return photoDataUrl;
+  }
+}
+
+async function createSignedProgressPhotoUrl(client, storagePath) {
+  if (!storagePath) return "";
+  const bucket = getSupabaseProductConfig().progressBucket || "progress-photos";
+  const { data, error } = await client.storage
+    .from(bucket)
+    .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
+  if (error) return "";
+  return data?.signedUrl || "";
+}
+
+async function uploadProgressPhoto(client, currentUser, entry) {
+  const bucket = getSupabaseProductConfig().progressBucket || "progress-photos";
+  if (entry.photoStoragePath && !String(entry.photoDataUrl || "").startsWith("data:image/")) {
+    const signedUrl = await createSignedProgressPhotoUrl(client, entry.photoStoragePath);
+    return {
+      photoDataUrl: signedUrl || entry.photoDataUrl || "",
+      photoStoragePath: entry.photoStoragePath
+    };
+  }
+
+  if (!String(entry.photoDataUrl || "").startsWith("data:image/")) {
+    return {
+      photoDataUrl: entry.photoDataUrl || "",
+      photoStoragePath: entry.photoStoragePath || ""
+    };
+  }
+
+  const response = await fetch(entry.photoDataUrl);
+  const blob = await response.blob();
+  const filePath = `${currentUser.id}/progress/${entry.id || Date.now().toString(36)}.jpg`;
+  const { error: uploadError } = await client.storage
+    .from(bucket)
+    .upload(filePath, blob, {
+      upsert: true,
+      contentType: "image/jpeg"
+    });
+
+  if (uploadError) throw uploadError;
+
+  const signedUrl = await createSignedProgressPhotoUrl(client, filePath);
+  return {
+    photoDataUrl: signedUrl,
+    photoStoragePath: filePath
+  };
+}
+
+async function ensureProfileRow({ syncLocal = false } = {}) {
+  if (!state.currentUser?.id) {
+    throw new Error("Aucun utilisateur authentifié");
+  }
+
+  const client = await getSupabaseClient();
+
+  const { data: existingRow, error: existingError } = await client
+    .from("profiles")
+    .select("*")
+    .eq("auth_user_id", state.currentUser.id)
+    .maybeSingle();
+
+  if (existingError) {
+    throw existingError;
+  }
+
+  if (existingRow && !syncLocal) {
+    profileRowCache = existingRow;
+    return existingRow;
+  }
+
+  const photoPath = syncLocal ? await uploadProfilePhoto(client, state.currentUser) : (existingRow?.photo_path || "");
+  const seedProfile = syncLocal
+    ? (state.profile || defaultProfile)
+    : sanitizeProfile({
+      ...defaultProfile,
+      name: existingRow?.name || state.currentUser.displayName || ""
+    });
+  const payload = buildProfilePayload(seedProfile, state.currentUser, photoPath || existingRow?.photo_path || "", existingRow);
+  const { data, error } = await client
+    .from("profiles")
+    .upsert(payload, { onConflict: "auth_user_id" })
+    .select()
+    .single();
+
+  if (error) {
+    throw error;
+  }
+  profileRowCache = data;
+  return data;
+}
+
+function profileRowToLocalProfile(profileRow) {
+  return sanitizeProfile({
+    ...(state.profile || defaultProfile),
+    name: profileRow?.name || state.currentUser?.displayName || "",
+    age: profileRow?.age ? String(profileRow.age) : "",
+    weightKg: profileRow?.weight_kg != null ? String(profileRow.weight_kg) : "",
+    photoDataUrl: profileRow?.photo_path || "",
+    role: profileRow?.role || defaultProfile.role,
+    accountStatus: profileRow?.account_status || defaultProfile.accountStatus,
+    goal: profileRow?.goal || defaultProfile.goal,
+    level: profileRow?.level || defaultProfile.level,
+    frequency: profileRow?.frequency || defaultProfile.frequency,
+    place: profileRow?.place || defaultProfile.place,
+    sessionTime: profileRow?.session_time || defaultProfile.sessionTime,
+    preferredSplit: profileRow?.preferred_split || defaultProfile.preferredSplit,
+    foodPreference: profileRow?.food_preference || defaultProfile.foodPreference,
+    recoveryPreference: profileRow?.recovery_preference || defaultProfile.recoveryPreference,
+    coachTone: profileRow?.coach_tone || defaultProfile.coachTone
+  });
+}
+
+function mapTrainingSessionToRemote(entry, profileId) {
+  return {
+    profile_id: profileId,
+    source: entry.source || "ia",
+    type: "training",
+    title: entry.title || "Séance",
+    objective: entry.objective || null,
+    zone: entry.zone || null,
+    place: entry.place || null,
+    duration_min: entry.durationMin || 0,
+    duration_real_min: entry.durationRealMin || 0,
+    completed_sets: entry.completedSets || 0,
+    volume: entry.volume || 0,
+    calories_estimate: entry.caloriesEstimate || 0,
+    feedback: entry.feedback || null,
+    difficulty: entry.difficulty || null,
+    difficulty_rpe: entry.difficultyRpe || null,
+    training_load: entry.trainingLoad || null,
+    coach_note: entry.coachNote || null,
+    metadata: {
+      ...(entry.metadata || {}),
+      clientId: entry.id,
+      comparison: entry.comparison || null,
+      warmup: entry.warmup || [],
+      finisher: entry.finisher || "",
+      fatigueInput: entry.fatigueInput || "normal",
+      volumeByMuscle: entry.volumeByMuscle || {}
+    },
+    created_at: entry.date || new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+}
+
+function mapTrainingExercisesToRemote(remoteSessionId, entry) {
+  return (entry.exercises || []).map((exercise, index) => ({
+    session_id: remoteSessionId,
+    exercise_id: exercise.id,
+    exercise_name: exercise.nom || exercise.name || exercise.id,
+    position: index,
+    sets_planned: exercise.setsPlanned || 0,
+    sets_done: exercise.setsDone || 0,
+    reps_completed: exercise.repsCompleted || 0,
+    rest_sec: exercise.restSec || 0,
+    comparison: {
+      ...(exercise.comparison || {}),
+      repsTarget: exercise.repsTarget || "",
+      skipped: Boolean(exercise.skipped),
+      modified: Boolean(exercise.modified)
+    },
+    updated_at: new Date().toISOString()
+  }));
+}
+
+function mapRecoveryEntryToRemote(entry, profileId) {
+  return {
+    profile_id: profileId,
+    source: entry.source || entry.type || "recovery",
+    title: entry.title || "Recovery",
+    duration_min: entry.durationRealMin || entry.durationMin || 0,
+    stress_impact: entry.metadata?.justification?.[1] || entry.coachNote || "",
+    created_at: entry.date || new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+}
+
+function mapNutritionHistoryToRemote(entry, profileId) {
+  return {
+    profile_id: profileId,
+    log_date: dayKey(entry.date),
+    goal: entry.goal || null,
+    calories: entry.calories || null,
+    proteins: state.nutritionProfile?.proteins || null,
+    carbs: state.nutritionProfile?.carbs || null,
+    fats: state.nutritionProfile?.fats || null,
+    training_load: entry.trainingLoad || null,
+    meal_ids: entry.mealIds || [],
+    notes: [],
+    updated_at: new Date().toISOString()
+  };
+}
+
+function mapProgressPhotoToRemote(entry, profileId) {
+  return {
+    profile_id: profileId,
+    photo_date: dayKey(entry.date),
+    zone: entry.zone || null,
+    weight_kg: entry.weightKg ? Number(entry.weightKg) : null,
+    height_cm: entry.heightCm ? parseInt(entry.heightCm, 10) : null,
+    context: entry.context || null,
+    note: entry.note || null,
+    photo_storage_path: entry.photoStoragePath || null,
+    metadata: {
+      clientId: entry.id,
+      sourceUrl: entry.photoDataUrl || ""
+    },
+    created_at: entry.date ? `${entry.date}T08:00:00.000Z` : new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+}
+
+function mapBadgeRows(profileId) {
+  return buildBadgeCollection().map((badge) => ({
+    profile_id: profileId,
+    badge_key: badge.id,
+    unlocked_at: badge.unlocked ? new Date().toISOString() : null,
+    status: badge.unlocked ? "unlocked" : "locked",
+    updated_at: new Date().toISOString()
+  }));
+}
+
+function mapStreakRows(profileId, shared) {
+  return [
+    {
+      profile_id: profileId,
+      streak_type: "activity",
+      current_value: shared.stats.streak || 0,
+      best_value: Math.max(shared.stats.streak || 0, state.authState?.bestStreak || 0),
+      updated_at: new Date().toISOString()
+    },
+    {
+      profile_id: profileId,
+      streak_type: "nutrition",
+      current_value: shared.fuelRatio || 0,
+      best_value: shared.fuelRatio || 0,
+      updated_at: new Date().toISOString()
+    }
+  ];
+}
+
+function mapSessionRowToHistoryEntry(sessionRow) {
+  const comparison = sessionRow.metadata?.comparison || null;
+  const exercises = (sessionRow.session_exercises || [])
+    .sort((left, right) => (left.position || 0) - (right.position || 0))
+    .map((exercise) => ({
+      id: exercise.exercise_id,
+      nom: exercise.exercise_name,
+      setsPlanned: exercise.sets_planned || 0,
+      setsDone: exercise.sets_done || 0,
+      repsTarget: exercise.comparison?.repsTarget || "",
+      repsCompleted: exercise.reps_completed || 0,
+      restSec: exercise.rest_sec || 0,
+      skipped: Boolean(exercise.comparison?.skipped),
+      modified: Boolean(exercise.comparison?.modified),
+      comparison: exercise.comparison || {}
+    }));
+
+  return {
+    id: sessionRow.metadata?.clientId || `session_${sessionRow.id}`,
+    date: sessionRow.created_at,
+    title: sessionRow.title,
+    source: sessionRow.source || "ia",
+    type: sessionRow.type || "training",
+    objective: sessionRow.objective || "muscle",
+    zone: sessionRow.zone || "full",
+    place: sessionRow.place || "mixte",
+    equipmentUsed: [],
+    durationMin: sessionRow.duration_min || 0,
+    durationRealMin: sessionRow.duration_real_min || sessionRow.duration_min || 0,
+    caloriesEstimate: sessionRow.calories_estimate || 0,
+    completedSets: sessionRow.completed_sets || 0,
+    seriesTerminees: sessionRow.completed_sets || 0,
+    volume: sessionRow.volume || 0,
+    volumeByMuscle: sessionRow.metadata?.volumeByMuscle || {},
+    trainingLoad: sessionRow.training_load || "medium",
+    fatigueInput: sessionRow.metadata?.fatigueInput || "normal",
+    difficulty: sessionRow.difficulty || "tenue",
+    difficultyRpe: sessionRow.difficulty_rpe || 0,
+    exercises,
+    warmup: sessionRow.metadata?.warmup || [],
+    finisher: sessionRow.metadata?.finisher || "",
+    metadata: sessionRow.metadata || {},
+    feedback: sessionRow.feedback || null,
+    coachNote: sessionRow.coach_note || "",
+    comparison
+  };
+}
+
+function mapRecoveryRowToHistoryEntry(row) {
+  const type = row.source === "noushi" ? "noushi" : "relax";
+  return {
+    id: `recovery_${row.id}`,
+    date: row.created_at,
+    title: row.title,
+    source: row.source || type,
+    type,
+    objective: "recovery",
+    zone: "full",
+    place: "maison",
+    equipmentUsed: ["Aucun"],
+    durationMin: row.duration_min || 0,
+    durationRealMin: row.duration_min || 0,
+    caloriesEstimate: Math.round((row.duration_min || 0) * 2.2),
+    completedSets: 1,
+    seriesTerminees: 1,
+    volume: row.duration_min || 0,
+    volumeByMuscle: {},
+    trainingLoad: "low",
+    fatigueInput: "recovery",
+    difficulty: "completed",
+    difficultyRpe: type === "relax" ? 2 : 3,
+    exercises: [],
+    warmup: [],
+    finisher: "",
+    metadata: {},
+    feedback: null,
+    coachNote: row.stress_impact || ""
+  };
+}
+
+function mapProgressPhotoRowToEntry(row) {
+  return {
+    id: row.metadata?.clientId || `progress_${row.id}`,
+    remoteId: row.id,
+    profileId: row.profile_id,
+    date: row.photo_date,
+    zone: row.zone || "haut du corps",
+    weightKg: row.weight_kg != null ? String(row.weight_kg) : "",
+    heightCm: row.height_cm != null ? String(row.height_cm) : "",
+    context: row.context || "",
+    note: row.note || "",
+    photoDataUrl: row.photo_signed_url || "",
+    photoStoragePath: row.photo_storage_path || ""
+  };
+}
+
+function restoreStateFromRemote(remote) {
+  state.profile = profileRowToLocalProfile(remote.profile);
+  state.profileSnapshots = (remote.bodyMetrics || []).map((metric) => ({
+    date: metric.metric_date,
+    weightKg: metric.weight_kg != null ? Number(metric.weight_kg) : null,
+    notes: metric.notes || ""
+  }));
+
+  const recipeFavorites = new Set((remote.recipeFavorites || []).map((item) => `recipe:${item.recipe_id}`));
+  const localExerciseFavorites = [...state.favorites].filter((item) => String(item).startsWith("exo:"));
+  state.favorites = new Set([...localExerciseFavorites, ...recipeFavorites]);
+
+  const trainingEntries = (remote.sessions || []).map(mapSessionRowToHistoryEntry);
+  const recoveryEntries = (remote.recoveryLogs || []).map(mapRecoveryRowToHistoryEntry);
+  state.history = [...trainingEntries, ...recoveryEntries]
+    .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime());
+  state.visualProgressEntries = (remote.progressPhotos || []).map(mapProgressPhotoRowToEntry)
+    .filter((entry) => entry.photoDataUrl);
+
+  const latestNutrition = (remote.nutritionDays || [])
+    .sort((left, right) => new Date(right.log_date).getTime() - new Date(left.log_date).getTime());
+  state.nutritionHistory = latestNutrition.map((entry) => ({
+    id: `nutrition_${entry.id}`,
+    date: entry.log_date,
+    goal: entry.goal || state.profile?.goal || "maintenance",
+    calories: entry.calories || 0,
+    trainingLoad: entry.training_load || "medium",
+    mealIds: entry.meal_ids || []
+  }));
+
+  if (latestNutrition[0]) {
+    state.nutritionProfile = {
+      goal: latestNutrition[0].goal || state.profile?.goal || "maintenance",
+      weightKg: state.profile?.weightKg ? Number(state.profile.weightKg) : null,
+      activity: state.nutritionProfile?.activity || "medium",
+      calories: latestNutrition[0].calories || 0,
+      proteins: latestNutrition[0].proteins || 0,
+      carbs: latestNutrition[0].carbs || 0,
+      fats: latestNutrition[0].fats || 0,
+      trainingLoad: latestNutrition[0].training_load || "medium"
+    };
+  } else {
+    state.nutritionProfile = null;
+  }
+
+  state.showOnboarding = !Boolean(state.profile?.name || state.profile?.weightKg);
+  persistAllUserState();
+}
+
+async function enforceAccountStatusOrThrow() {
+  if (!state.profile || state.profile.role === "admin") return;
+  if (state.profile.accountStatus === "active") return;
+
+  const message = state.profile.accountStatus === "pending"
+    ? "Compte en attente de validation. L’administrateur doit approuver ton accès avant l’ouverture de l’app."
+    : state.profile.accountStatus === "banned"
+      ? "Compte banni. Contacte l’administrateur si tu penses qu’il s’agit d’une erreur."
+      : "Compte suspendu. Contacte l’administrateur pour réactiver l’accès.";
+
+  try {
+    const client = await getSupabaseClient();
+    await client.auth.signOut();
+  } catch {}
+
+  resetUserScopedState({ preserveProfileName: state.profile?.name || "" });
+  setSignedOutState({
+    mode: "supabase",
+    error: message,
+    notice: ""
+  });
+  throw new Error(message);
+}
+
+async function fetchRemoteSnapshot(profileId) {
+  const client = await getSupabaseClient();
+
+  const [
+    sessionsResult,
+    bodyMetricsResult,
+    nutritionResult,
+    recipeFavoritesResult,
+    recoveryResult,
+    progressPhotosResult
+  ] = await Promise.all([
+    client
+      .from("sessions")
+      .select(`
+        id,
+        source,
+        type,
+        title,
+        objective,
+        zone,
+        place,
+        duration_min,
+        duration_real_min,
+        completed_sets,
+        volume,
+        calories_estimate,
+        feedback,
+        difficulty,
+        difficulty_rpe,
+        training_load,
+        coach_note,
+        metadata,
+        created_at,
+        updated_at,
+        session_exercises (
+          id,
+          exercise_id,
+          exercise_name,
+          position,
+          sets_planned,
+          sets_done,
+          reps_completed,
+          rest_sec,
+          comparison,
+          updated_at
+        )
+      `)
+      .eq("profile_id", profileId)
+      .order("created_at", { ascending: false }),
+    client
+      .from("body_metrics")
+      .select("*")
+      .eq("profile_id", profileId)
+      .order("metric_date", { ascending: false }),
+    client
+      .from("nutrition_days")
+      .select("*")
+      .eq("profile_id", profileId)
+      .order("log_date", { ascending: false }),
+    client
+      .from("recipes_favorites")
+      .select("*")
+      .eq("profile_id", profileId)
+      .order("created_at", { ascending: false }),
+    client
+      .from("recovery_logs")
+      .select("*")
+      .eq("profile_id", profileId)
+      .order("created_at", { ascending: false }),
+    client
+      .from("progress_photos")
+      .select("*")
+      .eq("profile_id", profileId)
+      .order("photo_date", { ascending: false })
+  ]);
+
+  [sessionsResult, bodyMetricsResult, nutritionResult, recipeFavoritesResult, recoveryResult, progressPhotosResult].forEach((result) => {
+    if (result.error) throw result.error;
+  });
+
+  const progressPhotos = await Promise.all((progressPhotosResult.data || []).map(async (row) => ({
+    ...row,
+    photo_signed_url: await createSignedProgressPhotoUrl(client, row.photo_storage_path)
+  })));
+
+  return {
+    profile: profileRowCache,
+    sessions: sessionsResult.data || [],
+    bodyMetrics: bodyMetricsResult.data || [],
+    nutritionDays: nutritionResult.data || [],
+    recipeFavorites: recipeFavoritesResult.data || [],
+    recoveryLogs: recoveryResult.data || [],
+    progressPhotos
+  };
+}
+
+export async function pullSupabaseSnapshot() {
+  const profileRow = await ensureProfileRow();
+  const remote = await fetchRemoteSnapshot(profileRow.id);
+  restoreStateFromRemote(remote);
+  await enforceAccountStatusOrThrow();
+  state.syncRuntime = {
+    status: "ready",
+    error: "",
+    lastSyncAt: new Date().toISOString()
+  };
+  setAuthState({
+    status: "ready",
+    mode: state.authState.mode,
+    lastSyncAt: state.syncRuntime.lastSyncAt,
+    error: ""
+  });
+  return remote;
+}
+
+async function replaceRows(client, table, rows, filterKey, filterValue) {
+  const { error: deleteError } = await client.from(table).delete().eq(filterKey, filterValue);
+  if (deleteError) throw deleteError;
+  if (!rows.length) return [];
+  const { data, error } = await client.from(table).insert(rows).select();
+  if (error) throw error;
+  return data || [];
+}
+
+export async function pushSupabaseSnapshot() {
+  const client = await getSupabaseClient();
+  const profileRow = await ensureProfileRow({ syncLocal: true });
+  const profileId = profileRow.id;
+  const trainingEntries = state.history.filter((entry) => entry.type === "training");
+  const recoveryEntries = state.history.filter((entry) => entry.type === "relax" || entry.type === "noushi");
+  const shared = getSharedDashboardData();
+
+  await replaceRows(
+    client,
+    "goals",
+    [{
+      profile_id: profileId,
+      category: "primary",
+      target_value: null,
+      target_unit: null,
+      target_date: null,
+      status: "active",
+      updated_at: new Date().toISOString()
+    }],
+    "profile_id",
+    profileId
+  );
+
+  await replaceRows(
+    client,
+    "body_metrics",
+    (state.profileSnapshots || []).map((snapshot) => ({
+      profile_id: profileId,
+      metric_date: dayKey(snapshot.date),
+      weight_kg: snapshot.weightKg != null ? Number(snapshot.weightKg) : null,
+      notes: snapshot.notes || "",
+      updated_at: new Date().toISOString()
+    })),
+    "profile_id",
+    profileId
+  );
+
+  const uploadedProgressEntries = [];
+  for (const entry of state.visualProgressEntries || []) {
+    const uploaded = await uploadProgressPhoto(client, state.currentUser, entry);
+    uploadedProgressEntries.push({
+      ...entry,
+      photoDataUrl: uploaded.photoDataUrl || entry.photoDataUrl,
+      photoStoragePath: uploaded.photoStoragePath || entry.photoStoragePath
+    });
+  }
+  state.visualProgressEntries = uploadedProgressEntries;
+  persistVisualProgressEntries();
+
+  await replaceRows(
+    client,
+    "progress_photos",
+    uploadedProgressEntries.map((entry) => mapProgressPhotoToRemote(entry, profileId)),
+    "profile_id",
+    profileId
+  );
+
+  const remoteSessions = await replaceRows(
+    client,
+    "sessions",
+    trainingEntries.map((entry) => mapTrainingSessionToRemote(entry, profileId)),
+    "profile_id",
+    profileId
+  );
+
+  const sessionExerciseRows = remoteSessions.flatMap((row) => {
+    const entry = trainingEntries.find((item) => item.id === row.metadata?.clientId);
+    return entry ? mapTrainingExercisesToRemote(row.id, entry) : [];
+  });
+
+  if (sessionExerciseRows.length) {
+    const { error: exercisesError } = await client
+      .from("session_exercises")
+      .insert(sessionExerciseRows);
+    if (exercisesError) throw exercisesError;
+  }
+
+  await replaceRows(
+    client,
+    "recovery_logs",
+    recoveryEntries.map((entry) => mapRecoveryEntryToRemote(entry, profileId)),
+    "profile_id",
+    profileId
+  );
+
+  await replaceRows(
+    client,
+    "nutrition_days",
+    (state.nutritionHistory || []).map((entry) => mapNutritionHistoryToRemote(entry, profileId)),
+    "profile_id",
+    profileId
+  );
+
+  await replaceRows(
+    client,
+    "recipes_favorites",
+    [...state.favorites]
+      .filter((favorite) => String(favorite).startsWith("recipe:"))
+      .map((favorite) => ({
+        profile_id: profileId,
+        recipe_id: favorite.split(":")[1],
+        created_at: new Date().toISOString()
+      })),
+    "profile_id",
+    profileId
+  );
+
+  await replaceRows(client, "badges", mapBadgeRows(profileId), "profile_id", profileId);
+  await replaceRows(client, "streaks", mapStreakRows(profileId, shared), "profile_id", profileId);
+
+  const aiContext = {
+    profile: state.profile,
+    latestTraining: shared.latestTraining,
+    latestRecovery: shared.latestRecovery,
+    nutrition: shared.nutrition,
+    progressPoints: shared.progressPoints
+  };
+  await client.from("ai_memory").upsert({
+    profile_id: profileId,
+    memory_key: "context",
+    payload: aiContext,
+    updated_at: new Date().toISOString()
+  }, { onConflict: "profile_id,memory_key" });
+
+  state.syncRuntime = {
+    status: "ready",
+    error: "",
+    lastSyncAt: new Date().toISOString()
+  };
+  setAuthState({
+    status: "ready",
+    mode: state.authState.mode,
+    lastSyncAt: state.syncRuntime.lastSyncAt,
+    error: ""
+  });
+  publicSupabaseState({
+    status: "ready",
+    error: "",
+    lastCheckedAt: new Date().toISOString()
+  });
+
+  return { synced: true, updatedAt: state.syncRuntime.lastSyncAt };
+}
+
+async function bindSupabaseAuthListener() {
+  if (authListenerBound || !hasSupabaseProductConfig()) return;
+  const client = await getSupabaseClient();
+  client.auth.onAuthStateChange((_event, session) => {
+    if (session?.user) {
+      setAuthenticatedUser({
+        session,
+        user: session.user,
+        mode: "supabase",
+        notice: ""
+      });
+      ensureProfileRow()
+        .then((profileRow) => {
+          state.profile = profileRowToLocalProfile(profileRow);
+          persistProfile();
+          return enforceAccountStatusOrThrow();
+        })
+        .then(() => pullSupabaseSnapshot())
+        .catch((error) => {
+          if (!state.currentUser) return;
+          setAuthState({
+            status: "error",
+            mode: "supabase",
+            error: error instanceof Error ? error.message : String(error)
+          });
+        });
+      return;
+    }
+
+    resetUserScopedState();
+    setSignedOutState({
+      mode: hasSupabaseProductConfig() ? "supabase" : "preview",
+      notice: hasSupabaseProductConfig()
+        ? "Connecte-toi pour ouvrir ton espace."
+        : "Mode local actif."
+    });
+  });
+  authListenerBound = true;
+}
+
+export async function initializeAuth() {
+  publicSupabaseState({
+    status: hasSupabaseProductConfig() ? "connecting" : "idle",
+    error: ""
+  });
+
+  if (hasSupabaseProductConfig()) {
+    try {
+      await bindSupabaseAuthListener();
+      const client = await getSupabaseClient();
+      const { data, error } = await client.auth.getSession();
+      if (error) throw error;
+
+      if (data.session?.user) {
+        setAuthenticatedUser({
+          session: data.session,
+          user: data.session.user,
+          mode: "supabase",
+          notice: ""
+        });
+        const profileRow = await ensureProfileRow();
+        state.profile = profileRowToLocalProfile(profileRow);
+        persistProfile();
+        await enforceAccountStatusOrThrow();
+        await pullSupabaseSnapshot();
+        state.showOnboarding = !Boolean(state.profile?.name || state.profile?.weightKg);
+        publicSupabaseState({
+          status: "ready",
+          error: "",
+          lastCheckedAt: new Date().toISOString()
+        });
+        return { ok: true, mode: "supabase" };
+      }
+
+      resetUserScopedState();
+      setSignedOutState({
+        mode: "supabase",
+        notice: "Connecte-toi pour ouvrir ton espace."
+      });
+      publicSupabaseState({
+        status: "ready",
+        error: "",
+        lastCheckedAt: new Date().toISOString()
+      });
+      return { ok: false, mode: "supabase" };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      publicSupabaseState({
+        status: "error",
+        error: message,
+        lastCheckedAt: new Date().toISOString()
+      });
+      setAuthState({
+        status: "error",
+        mode: "supabase",
+        error: message,
+        notice: isPreviewAuthEnabled() ? "Flow cloud indisponible, mode local possible." : ""
+      });
+    }
+  }
+
+  const previewSession = loadJSON(STORAGE_KEYS.previewSession, null);
+  if (previewSession && isPreviewAuthEnabled()) {
+    const restored = await applyPreviewSession(previewSession);
+    return { ok: Boolean(restored), mode: "preview" };
+  }
+
+  resetUserScopedState();
+  setSignedOutState({
+    mode: "preview",
+    notice: isPreviewAuthEnabled()
+      ? "Mode local disponible tant que Supabase n’est pas branché."
+      : "Configuration produit requise pour ouvrir l’espace sécurisé."
+  });
+  return { ok: false, mode: "preview" };
+}
+
+export async function signUpWithPassword({ displayName, email, password }) {
+  const safeDisplayName = String(displayName || "").trim();
+  const safeEmail = String(email || "").trim().toLowerCase();
+  const safePassword = String(password || "");
+
+  if (!safeDisplayName) throw new Error("Pseudo requis");
+  if (!safeEmail) throw new Error("Email requis");
+  if (safePassword.length < 8) throw new Error("Mot de passe trop court");
+
+  if (hasSupabaseProductConfig()) {
+    const client = await getSupabaseClient();
+    const { data, error } = await client.auth.signUp({
+      email: safeEmail,
+      password: safePassword,
+      options: {
+        data: {
+          display_name: safeDisplayName
+        }
+      }
+    });
+    if (error) throw error;
+
+    if (data.user && data.session) {
+      setAuthenticatedUser({
+        session: data.session,
+        user: data.user,
+        mode: "supabase",
+        notice: ""
+      });
+      state.profile = sanitizeProfile({ ...defaultProfile, name: safeDisplayName });
+      persistProfile();
+      const profileRow = await ensureProfileRow({ syncLocal: true });
+      state.profile = profileRowToLocalProfile(profileRow);
+      persistProfile();
+      await enforceAccountStatusOrThrow();
+      await pushSupabaseSnapshot();
+      await pullSupabaseSnapshot();
+    } else {
+      setSignedOutState({
+        mode: "supabase",
+        notice: isConfiguredAdminEmail(safeEmail)
+          ? "Compte admin créé. Vérifie ton email pour confirmer la session si la confirmation est activée."
+          : "Compte créé. Vérifie ton email puis attends la validation administrateur si la confirmation est activée."
+      });
+    }
+    return data;
+  }
+
+  if (!isPreviewAuthEnabled()) {
+    throw new Error("Aucun provider d’auth disponible");
+  }
+
+  const existing = findPreviewUserByEmail(safeEmail);
+  if (existing) throw new Error("Un compte existe déjà avec cet email");
+
+  const nextUser = {
+    id: `preview_${Date.now().toString(36)}`,
+    email: safeEmail,
+    password: safePassword,
+    displayName: safeDisplayName,
+    createdAt: new Date().toISOString()
+  };
+
+  const users = loadPreviewUsers();
+  users.push(nextUser);
+  savePreviewUsers(users);
+  savePreviewSession({
+    userId: nextUser.id,
+    email: nextUser.email,
+    createdAt: new Date().toISOString()
+  });
+
+  state.profile = sanitizeProfile({ ...defaultProfile, name: safeDisplayName });
+  persistProfile();
+  await applyPreviewSession({ userId: nextUser.id, email: nextUser.email });
+  return { user: previewUserFromRecord(nextUser), session: state.session };
+}
+
+export async function signInWithPassword({ email, password }) {
+  const safeEmail = String(email || "").trim().toLowerCase();
+  const safePassword = String(password || "");
+
+  if (!safeEmail) throw new Error("Email requis");
+  if (!safePassword) throw new Error("Mot de passe requis");
+
+  if (hasSupabaseProductConfig()) {
+    const client = await getSupabaseClient();
+    const { data, error } = await client.auth.signInWithPassword({
+      email: safeEmail,
+      password: safePassword
+    });
+    if (error) throw error;
+    if (data.user) {
+      setAuthenticatedUser({
+        session: data.session || null,
+        user: data.user,
+        mode: "supabase",
+        notice: ""
+      });
+      const profileRow = await ensureProfileRow();
+      state.profile = profileRowToLocalProfile(profileRow);
+      persistProfile();
+      await enforceAccountStatusOrThrow();
+      await pullSupabaseSnapshot();
+    }
+    return data;
+  }
+
+  const previewUser = findPreviewUserByEmail(safeEmail);
+  if (!previewUser || previewUser.password !== safePassword) {
+    throw new Error("Identifiants invalides");
+  }
+
+  savePreviewSession({
+    userId: previewUser.id,
+    email: previewUser.email,
+    createdAt: new Date().toISOString()
+  });
+  await applyPreviewSession({
+    userId: previewUser.id,
+    email: previewUser.email
+  });
+  return { user: previewUserFromRecord(previewUser), session: state.session };
+}
+
+export async function continueWithPreview({ displayName, email, password } = {}) {
+  if (!isPreviewAuthEnabled()) {
+    throw new Error("Le mode local est désactivé");
+  }
+
+  const safeEmail = String(email || "").trim().toLowerCase();
+  const safeDisplayName = String(displayName || "").trim() || "Athlète MAYA";
+  const safePassword = String(password || "").trim() || "preview-mode";
+
+  const existing = safeEmail ? findPreviewUserByEmail(safeEmail) : null;
+  if (existing) {
+    return signInWithPassword({
+      email: existing.email,
+      password: existing.password
+    });
+  }
+
+  return signUpWithPassword({
+    displayName: safeDisplayName,
+    email: safeEmail || `preview+${Date.now().toString(36)}@maya.local`,
+    password: safePassword.length >= 8 ? safePassword : `${safePassword}1234`
+  });
+}
+
+export async function signOutCurrentUser() {
+  if (state.authState.mode === "supabase" && hasSupabaseProductConfig()) {
+    const client = await getSupabaseClient();
+    await client.auth.signOut();
+  }
+  clearPreviewSession();
+  resetUserScopedState();
+  setSignedOutState({
+    mode: hasSupabaseProductConfig() ? "supabase" : "preview",
+    notice: hasSupabaseProductConfig()
+      ? "Déconnecté. Reconnecte-toi pour retrouver ton espace."
+      : "Session locale fermée."
+  });
+}
+
+export function isAdminUser() {
+  return Boolean(state.profile?.role === "admin");
+}
+
+function requireAdminAccess() {
+  if (!isAdminUser()) {
+    throw new Error("Accès admin requis");
+  }
+}
+
+function normalizeAdminProfileRow(row) {
+  return {
+    id: row.id,
+    authUserId: row.auth_user_id,
+    email: row.email || "",
+    name: row.name || "",
+    role: row.role || "user",
+    accountStatus: row.account_status || "active",
+    createdAt: row.created_at || ""
+  };
+}
+
+function normalizeAdminPhotoRow(row) {
+  const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+  return {
+    id: row.id,
+    profileId: row.profile_id,
+    userName: profile?.name || "",
+    userEmail: profile?.email || "",
+    date: row.photo_date,
+    zone: row.zone || "",
+    weightKg: row.weight_kg != null ? String(row.weight_kg) : "",
+    heightCm: row.height_cm != null ? String(row.height_cm) : "",
+    context: row.context || "",
+    note: row.note || "",
+    photoStoragePath: row.photo_storage_path || "",
+    photoDataUrl: row.photo_signed_url || "",
+    createdAt: row.created_at || ""
+  };
+}
+
+export async function refreshAdminDashboard() {
+  requireAdminAccess();
+  const client = await getSupabaseClient();
+  state.adminRuntime = {
+    ...(state.adminRuntime || {}),
+    loading: true,
+    error: ""
+  };
+
+  try {
+    const [profilesResult, photosResult] = await Promise.all([
+      client
+        .from("profiles")
+        .select("id, auth_user_id, email, name, role, account_status, created_at")
+        .order("created_at", { ascending: false }),
+      client
+        .from("progress_photos")
+        .select(`
+          id,
+          profile_id,
+          photo_date,
+          zone,
+          weight_kg,
+          height_cm,
+          context,
+          note,
+          photo_storage_path,
+          created_at,
+          profiles!inner (
+            name,
+            email,
+            role,
+            account_status
+          )
+        `)
+        .order("photo_date", { ascending: false })
+    ]);
+
+    if (profilesResult.error) throw profilesResult.error;
+    if (photosResult.error) throw photosResult.error;
+
+    const signedPhotos = await Promise.all((photosResult.data || []).map(async (row) => ({
+      ...row,
+      photo_signed_url: await createSignedProgressPhotoUrl(client, row.photo_storage_path)
+    })));
+
+    state.adminRuntime = {
+      ...(state.adminRuntime || {}),
+      users: (profilesResult.data || []).map(normalizeAdminProfileRow),
+      photos: signedPhotos.map(normalizeAdminPhotoRow),
+      loading: false,
+      error: "",
+      lastFetchedAt: new Date().toISOString()
+    };
+    return state.adminRuntime;
+  } catch (error) {
+    state.adminRuntime = {
+      ...(state.adminRuntime || {}),
+      loading: false,
+      error: error instanceof Error ? error.message : String(error)
+    };
+    throw error;
+  }
+}
+
+export async function deleteAdminProgressPhoto(photoId) {
+  requireAdminAccess();
+  const client = await getSupabaseClient();
+  const { data: row, error: fetchError } = await client
+    .from("progress_photos")
+    .select("id, photo_storage_path")
+    .eq("id", photoId)
+    .single();
+  if (fetchError) throw fetchError;
+
+  if (row?.photo_storage_path) {
+    await client.storage
+      .from(getSupabaseProductConfig().progressBucket || "progress-photos")
+      .remove([row.photo_storage_path]);
+  }
+
+  const { error } = await client
+    .from("progress_photos")
+    .delete()
+    .eq("id", photoId);
+  if (error) throw error;
+
+  return refreshAdminDashboard();
+}
+
+export async function deleteAdminUserPhotos(profileId) {
+  requireAdminAccess();
+  const client = await getSupabaseClient();
+  const { data: rows, error: fetchError } = await client
+    .from("progress_photos")
+    .select("id, photo_storage_path")
+    .eq("profile_id", profileId);
+  if (fetchError) throw fetchError;
+
+  const paths = (rows || []).map((row) => row.photo_storage_path).filter(Boolean);
+  if (paths.length) {
+    await client.storage
+      .from(getSupabaseProductConfig().progressBucket || "progress-photos")
+      .remove(paths);
+  }
+
+  const { error } = await client
+    .from("progress_photos")
+    .delete()
+    .eq("profile_id", profileId);
+  if (error) throw error;
+
+  return refreshAdminDashboard();
+}
+
+export async function setAdminUserStatus(profileId, status) {
+  requireAdminAccess();
+  const safeStatus = ["pending", "active", "suspended", "banned"].includes(status) ? status : "active";
+  const currentProfileRow = await ensureProfileRow();
+  if (currentProfileRow?.id === profileId && safeStatus !== "active") {
+    throw new Error("Impossible de désactiver le compte admin connecté.");
+  }
+  const client = await getSupabaseClient();
+  const { error } = await client
+    .from("profiles")
+    .update({
+      account_status: safeStatus,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", profileId);
+  if (error) throw error;
+
+  return refreshAdminDashboard();
+}
+
+export function updateSupabaseConfig(partialConfig) {
+  return publicSupabaseState(partialConfig);
+}
+
+export async function testSupabaseConfig() {
+  if (!hasSupabaseProductConfig()) {
+    publicSupabaseState({
+      status: "idle",
+      error: "Config Supabase interne manquante",
+      lastCheckedAt: new Date().toISOString()
+    });
+    return { ok: false, error: "Config Supabase interne manquante" };
+  }
+
+  const config = getSupabaseProductConfig();
+
+  try {
+    const response = await fetch(`${config.url.replace(/\/$/, "")}/auth/v1/settings`, {
+      headers: {
+        apikey: config.anonKey
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Supabase HTTP ${response.status}`);
+    }
+
+    publicSupabaseState({
+      status: "ready",
+      error: "",
+      lastCheckedAt: new Date().toISOString()
+    });
+    return { ok: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    publicSupabaseState({
+      status: "error",
+      error: message,
+      lastCheckedAt: new Date().toISOString()
+    });
+    return { ok: false, error: message };
+  }
+}
+
+export function isCloudSessionReady() {
+  return Boolean(state.authState.mode === "supabase" && state.currentUser?.id);
+}

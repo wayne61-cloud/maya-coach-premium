@@ -1,27 +1,7 @@
-import { EXO_BY_ID, EXOS } from "../catalog.js";
-import { defaultCustomWorkoutDraft, state } from "../state.js";
+import { EXO_BY_ID } from "../catalog.js";
+import { state } from "../state.js";
 import { getLatestPostWorkoutEntry } from "../workout.js";
 import { buildEmptyState, escapeHtml, formatShortDate } from "../utils.js";
-
-function groupedExercises() {
-  return [
-    ["Maison", EXOS.filter((exercise) => exercise.pole === "maison")],
-    ["Salle", EXOS.filter((exercise) => exercise.pole === "salle")],
-    ["Mixte", EXOS.filter((exercise) => exercise.pole === "mixte")]
-  ];
-}
-
-function renderExerciseOptions(selectedId) {
-  return groupedExercises().map(([label, exercises]) => `
-    <optgroup label="${escapeHtml(label)}">
-      ${exercises.map((exercise) => `
-        <option value="${escapeHtml(exercise.id)}" ${exercise.id === selectedId ? "selected" : ""}>
-          ${escapeHtml(exercise.nom)} • ${escapeHtml(exercise.muscle)}
-        </option>
-      `).join("")}
-    </optgroup>
-  `).join("");
-}
 
 function comparisonPillClass(status) {
   if (status === "up") return "pill-success";
@@ -101,91 +81,6 @@ function renderLatestResult(latest) {
   `;
 }
 
-function renderCustomBuilder() {
-  const draft = state.customWorkoutDraft || structuredClone(defaultCustomWorkoutDraft);
-  return `
-    <div class="card module-exos glow-coral">
-      <div class="eyebrow">Séance personnalisée</div>
-      <h3>Construire ma propre séance</h3>
-      <p class="muted">Choisis toi-même les exercices, le nombre de séries, les reps et le repos. Le suivi live et la comparaison à la dernière fois restent actifs.</p>
-
-      <div class="settings-grid compact-grid" style="margin-top: 10px;">
-        <div class="field-stack full-span">
-          <label class="field-label" for="customWorkoutTitle">Nom de la séance</label>
-          <div class="field-shell surface-form">
-            <input id="customWorkoutTitle" data-custom-workout-field="title" type="text" value="${escapeHtml(draft.title || "")}" placeholder="Upper 1, Full body du lundi..." />
-          </div>
-        </div>
-        <div class="field-stack">
-          <label class="field-label" for="customWorkoutObjective">Objectif</label>
-          <div class="field-shell surface-form">
-            <select id="customWorkoutObjective" data-custom-workout-field="objective">
-              ${["muscle", "force", "endurance", "seche"].map((goal) => `<option value="${goal}" ${draft.objective === goal ? "selected" : ""}>${escapeHtml(goal)}</option>`).join("")}
-            </select>
-          </div>
-        </div>
-        <div class="field-stack">
-          <label class="field-label" for="customWorkoutPlace">Lieu</label>
-          <div class="field-shell surface-form">
-            <select id="customWorkoutPlace" data-custom-workout-field="place">
-              ${["maison", "salle", "mixte"].map((place) => `<option value="${place}" ${draft.place === place ? "selected" : ""}>${escapeHtml(place)}</option>`).join("")}
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <div class="list" style="margin-top: 12px;">
-        ${(draft.blocks || []).map((block, index) => `
-          <div class="custom-block-card">
-            <div class="exercise-head">
-              <div>
-                <div class="exercise-title">Bloc ${index + 1}</div>
-                <div class="muted">Prescription manuelle</div>
-              </div>
-              <button class="btn btn-outline" data-action="remove-custom-block" data-id="${escapeHtml(block.id)}" ${(draft.blocks || []).length <= 1 ? "disabled" : ""}>Retirer</button>
-            </div>
-
-            <div class="settings-grid compact-grid">
-              <div class="field-stack full-span">
-                <label class="field-label" for="customExercise-${escapeHtml(block.id)}">Exercice</label>
-                <div class="field-shell surface-form">
-                  <select id="customExercise-${escapeHtml(block.id)}" data-custom-block-id="${escapeHtml(block.id)}" data-custom-block-field="exerciseId">
-                    ${renderExerciseOptions(block.exerciseId)}
-                  </select>
-                </div>
-              </div>
-              <div class="field-stack">
-                <label class="field-label" for="customSets-${escapeHtml(block.id)}">Séries</label>
-                <div class="field-shell surface-form">
-                  <input id="customSets-${escapeHtml(block.id)}" data-custom-block-id="${escapeHtml(block.id)}" data-custom-block-field="sets" type="number" min="1" max="8" value="${escapeHtml(block.sets)}" />
-                </div>
-              </div>
-              <div class="field-stack">
-                <label class="field-label" for="customReps-${escapeHtml(block.id)}">Reps / durée</label>
-                <div class="field-shell surface-form">
-                  <input id="customReps-${escapeHtml(block.id)}" data-custom-block-id="${escapeHtml(block.id)}" data-custom-block-field="reps" type="text" value="${escapeHtml(block.reps)}" placeholder="10-12 ou 30s" />
-                </div>
-              </div>
-              <div class="field-stack full-span">
-                <label class="field-label" for="customRest-${escapeHtml(block.id)}">Repos (sec)</label>
-                <div class="field-shell surface-form">
-                  <input id="customRest-${escapeHtml(block.id)}" data-custom-block-id="${escapeHtml(block.id)}" data-custom-block-field="restSec" type="number" min="20" max="240" value="${escapeHtml(block.restSec)}" />
-                </div>
-              </div>
-            </div>
-          </div>
-        `).join("")}
-      </div>
-
-      <div class="actions-row three" style="margin-top: 12px;">
-        <button class="btn btn-soft" data-action="add-custom-block">Ajouter un exercice</button>
-        <button class="btn btn-outline" data-action="reset-custom-workout">Réinitialiser</button>
-        <button class="btn btn-main" data-action="start-custom-workout">Démarrer ma séance</button>
-      </div>
-    </div>
-  `;
-}
-
 export function renderWorkout(node) {
   if (!state.workout) {
     const latest = getLatestPostWorkoutEntry();
@@ -193,10 +88,13 @@ export function renderWorkout(node) {
       <div class="section">
         ${latest ? renderLatestResult(latest) : `
           <div class="card">
-            ${buildEmptyState("Aucune séance en cours", "Génère une séance IA, crée ta séance personnalisée ou repars d'un exercice.", "Générer avec IA", "go-ia")}
+            ${buildEmptyState("Aucune séance en cours", "Prépare Ma séance, lance un défi NOUSHI ou repars d’un plan IA pour entrer en mode live.", "", "")}
+            <div class="actions-row two" style="margin-top: 12px;">
+              <button class="btn btn-main" data-action="go-page" data-page="my-session">Ouvrir Ma séance</button>
+              <button class="btn btn-outline" data-action="go-page" data-page="ia">Générer avec IA</button>
+            </div>
           </div>
         `}
-        ${renderCustomBuilder()}
       </div>
     `;
     return;

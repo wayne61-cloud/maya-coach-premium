@@ -1,4 +1,5 @@
 import { pushRemoteState, pullRemoteState } from "./storage.js";
+import { isCloudSessionReady, pullSupabaseSnapshot, pushSupabaseSnapshot } from "./supabase.js";
 import {
   defaultProfile,
   persistAIConfig,
@@ -7,11 +8,16 @@ import {
   persistNotificationConfig,
   persistNutritionProfile,
   persistNutritionHistory,
+  persistCustomWorkoutDraft,
   persistProfile,
   persistProfileSnapshots,
   persistSyncConfig,
+  setCustomWorkoutLibraryState,
+  persistVisualProgressEntries,
   sanitizeAIConfig,
+  sanitizeCustomWorkoutDraft,
   sanitizeNotificationConfig,
+  sanitizeVisualProgressEntry,
   sanitizeProfile,
   sanitizeSyncConfig,
   state
@@ -25,6 +31,12 @@ function buildSyncPayload() {
     favorites: [...(state.favorites || [])],
     nutritionProfile: state.nutritionProfile || null,
     nutritionHistory: state.nutritionHistory || [],
+    customWorkoutState: {
+      activeId: state.activeCustomWorkoutId,
+      sessions: state.customWorkoutLibrary || []
+    },
+    customWorkoutDraft: state.customWorkoutDraft || null,
+    visualProgressEntries: state.visualProgressEntries || [],
     aiConfig: state.aiConfig || null,
     notificationConfig: state.notificationConfig || null
   };
@@ -82,6 +94,16 @@ export async function requestMagicLink() {
 export async function pushSyncSnapshot() {
   state.syncRuntime = { ...state.syncRuntime, status: "push", error: "" };
   try {
+    if (isCloudSessionReady()) {
+      const result = await pushSupabaseSnapshot();
+      state.syncRuntime = {
+        status: "ready",
+        error: "",
+        lastSyncAt: result?.updatedAt || new Date().toISOString()
+      };
+      return result;
+    }
+
     const result = await pushRemoteState(state.syncConfig, buildSyncPayload());
     state.syncRuntime = {
       status: result?.synced === false ? "idle" : "ready",
@@ -102,6 +124,16 @@ export async function pushSyncSnapshot() {
 export async function pullSyncSnapshot() {
   state.syncRuntime = { ...state.syncRuntime, status: "pull", error: "" };
   try {
+    if (isCloudSessionReady()) {
+      const remote = await pullSupabaseSnapshot();
+      state.syncRuntime = {
+        status: "ready",
+        error: "",
+        lastSyncAt: new Date().toISOString()
+      };
+      return remote;
+    }
+
     const remote = await pullRemoteState(state.syncConfig);
     if (!remote) {
       state.syncRuntime = { ...state.syncRuntime, status: "idle" };
@@ -114,6 +146,18 @@ export async function pullSyncSnapshot() {
     state.favorites = new Set(Array.isArray(remote.favorites) ? remote.favorites : [...state.favorites]);
     state.nutritionProfile = remote.nutritionProfile ?? state.nutritionProfile;
     state.nutritionHistory = Array.isArray(remote.nutritionHistory) ? remote.nutritionHistory : state.nutritionHistory;
+    if (remote.customWorkoutState?.sessions || remote.customWorkoutDraft) {
+      const sessions = Array.isArray(remote.customWorkoutState?.sessions)
+        ? remote.customWorkoutState.sessions.map((session) => sanitizeCustomWorkoutDraft(session))
+        : [sanitizeCustomWorkoutDraft(remote.customWorkoutDraft)];
+      setCustomWorkoutLibraryState({
+        sessions,
+        activeId: remote.customWorkoutState?.activeId || sessions[0]?.id
+      });
+    }
+    state.visualProgressEntries = Array.isArray(remote.visualProgressEntries)
+      ? remote.visualProgressEntries.map((entry) => sanitizeVisualProgressEntry(entry)).filter((entry) => entry.photoDataUrl)
+      : state.visualProgressEntries;
     state.aiConfig = remote.aiConfig ? sanitizeAIConfig(remote.aiConfig) : state.aiConfig;
     state.notificationConfig = remote.notificationConfig ? sanitizeNotificationConfig(remote.notificationConfig) : state.notificationConfig;
 
@@ -123,6 +167,8 @@ export async function pullSyncSnapshot() {
     persistFavorites();
     persistNutritionProfile();
     persistNutritionHistory();
+    persistCustomWorkoutDraft();
+    persistVisualProgressEntries();
     persistAIConfig();
     persistNotificationConfig();
 
@@ -143,11 +189,17 @@ export async function pullSyncSnapshot() {
 }
 
 export function scheduleAutoSync() {
-  if (!state.syncConfig.autoSync || !state.syncConfig.endpoint || !state.syncConfig.token) return;
+  const canUseCloud = isCloudSessionReady();
+  const canUseLocal = state.syncConfig.autoSync && state.syncConfig.endpoint && state.syncConfig.token;
+  if (!canUseCloud && !canUseLocal) return;
   clearTimeout(scheduleAutoSync.timer);
   scheduleAutoSync.timer = setTimeout(async () => {
     try {
-      await pushSyncSnapshot();
+      if (canUseCloud) {
+        await pushSupabaseSnapshot();
+      } else {
+        await pushSyncSnapshot();
+      }
     } catch (error) {
       state.syncRuntime = {
         ...state.syncRuntime,

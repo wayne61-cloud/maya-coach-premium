@@ -1,6 +1,6 @@
 import { EXOS } from "../data/exos.js";
 import { RECIPES } from "../data/recipes.js";
-import { NOUSHI_EXOS } from "../data/noushi.js";
+import { NOUSHI_BEAST_SPOTLIGHTS, NOUSHI_CHALLENGES, NOUSHI_EXOS } from "../data/noushi.js";
 import { RELAX_DATA } from "../data/relax.js";
 import { normalizeKey } from "./utils.js";
 
@@ -51,13 +51,76 @@ export const EXO_BY_ID = new Map(EXOS.map((exercise) => [exercise.id, exercise])
 export const EXO_BY_NAME = new Map(EXOS.map((exercise) => [normalizeKey(exercise.nom), exercise]));
 export const RECIPE_BY_ID = new Map(RECIPES.map((recipe) => [recipe.id, recipe]));
 export const NOUSHI_BY_ID = new Map(NOUSHI_EXOS.map((item) => [item.id, item]));
+export const NOUSHI_CHALLENGE_BY_ID = new Map(NOUSHI_CHALLENGES.map((item) => [item.id, item]));
 export const RELAX_BY_ID = new Map(RELAX_DATA.map((item) => [item.id, item]));
 
+const UPPER_MUSCLES = new Set(["poitrine", "dos", "epaules", "triceps", "arriere-epaules", "grip"]);
+const LOWER_MUSCLES = new Set(["quadriceps", "jambes", "fessiers", "ischios", "mollets"]);
+
+function matchesNoushiZone(exercise, zone) {
+  if (!exercise) return false;
+  if (zone === "haut") return UPPER_MUSCLES.has(exercise.muscle);
+  if (zone === "bas") return LOWER_MUSCLES.has(exercise.muscle);
+  if (zone === "core") return exercise.muscle === "core";
+  return true;
+}
+
+function scoreNoushiExercise(exercise, challenge) {
+  let score = exercise.niveau * 10;
+  if (matchesNoushiZone(exercise, challenge.zone)) score += 12;
+  if ((exercise.objectif || []).includes(challenge.objectif)) score += 6;
+  if (challenge.exerciseIds.includes(exercise.id)) score += 4;
+  if (exercise.pattern === "carry" || exercise.pattern === "conditioning") score -= 3;
+  return score;
+}
+
+function getNoushiTargetCount(zone) {
+  return zone === "full" ? 6 : 4;
+}
+
+function buildNoushiChallengeExercises(challenge, place = "mixte") {
+  const safePlace = ["maison", "salle", "mixte"].includes(place) ? place : "mixte";
+  const targetCount = getNoushiTargetCount(challenge.zone);
+  const baseExercises = (challenge.exerciseIds || [])
+    .map((exerciseId) => EXO_BY_ID.get(exerciseId))
+    .filter(Boolean);
+
+  if (safePlace === "mixte") {
+    return baseExercises.slice(0, targetCount);
+  }
+
+  const selected = baseExercises.filter((exercise) => matchesPlace(exercise, safePlace));
+  const selectedIds = new Set(selected.map((exercise) => exercise.id));
+  const fallbackPool = EXOS
+    .filter((exercise) => (
+      exercise.niveau >= 2
+      && matchesPlace(exercise, safePlace)
+      && matchesNoushiZone(exercise, challenge.zone)
+      && !selectedIds.has(exercise.id)
+    ))
+    .sort((left, right) => scoreNoushiExercise(right, challenge) - scoreNoushiExercise(left, challenge));
+
+  for (const exercise of fallbackPool) {
+    if (selected.length >= targetCount) break;
+    selected.push(exercise);
+  }
+
+  if (!selected.length) {
+    return baseExercises.slice(0, targetCount);
+  }
+
+  return selected.slice(0, targetCount);
+}
+
 export function matchesPlace(exercise, place) {
-  if (!place || place === "all") return true;
+  if (!place || place === "all" || place === "mixte") return true;
   if (place === "maison") return exercise.pole === "maison" || exercise.pole === "mixte";
   if (place === "salle") return exercise.pole === "salle" || exercise.pole === "mixte";
   return exercise.pole === place;
+}
+
+export function getExercisesByPlace(place = "all") {
+  return EXOS.filter((exercise) => matchesPlace(exercise, place));
 }
 
 export function hasValidVideoId(videoId) {
@@ -132,6 +195,46 @@ export function getSimilarExercises(exerciseId) {
     .map((entry) => entry.candidate);
 }
 
+export function getNoushiChallengeVariant(challengeId, place = "mixte") {
+  const challenge = NOUSHI_CHALLENGE_BY_ID.get(challengeId);
+  if (!challenge) return null;
+
+  const safePlace = ["maison", "salle", "mixte"].includes(place) ? place : "mixte";
+  const exercises = buildNoushiChallengeExercises(challenge, safePlace);
+  if (!exercises.length) return null;
+
+  const estimatedMinutes = safePlace === "mixte"
+    ? challenge.temps
+    : Math.max(26, Math.round(exercises.length * 7 + (challenge.zone === "full" ? 8 : 6)));
+
+  return {
+    ...challenge,
+    effectivePlace: safePlace,
+    variantId: `${challenge.id}:${safePlace}`,
+    exerciseIds: exercises.map((exercise) => exercise.id),
+    exercises,
+    temps: estimatedMinutes
+  };
+}
+
+export function getNoushiChallengesByPlace(place = "mixte") {
+  return NOUSHI_CHALLENGES
+    .map((challenge) => getNoushiChallengeVariant(challenge.id, place))
+    .filter(Boolean);
+}
+
+export function getNoushiBeastSpotlights(place = "mixte") {
+  const safePlace = ["maison", "salle", "mixte"].includes(place) ? place : "mixte";
+  if (safePlace === "mixte") return NOUSHI_BEAST_SPOTLIGHTS;
+
+  const filtered = NOUSHI_BEAST_SPOTLIGHTS.filter((spotlight) => {
+    const exercise = EXO_BY_ID.get(spotlight.exerciseId);
+    return exercise && matchesPlace(exercise, safePlace);
+  });
+
+  return filtered.length ? filtered : NOUSHI_BEAST_SPOTLIGHTS;
+}
+
 export function getGlobalSearchResults(query) {
   const normalized = normalizeKey(query);
   if (normalized.length < 2) {
@@ -169,4 +272,4 @@ export function inferGoalFromExercise(exercise) {
   return "muscle";
 }
 
-export { EXOS, RECIPES, NOUSHI_EXOS, RELAX_DATA };
+export { EXOS, RECIPES, NOUSHI_EXOS, NOUSHI_CHALLENGES, NOUSHI_BEAST_SPOTLIGHTS, RELAX_DATA };

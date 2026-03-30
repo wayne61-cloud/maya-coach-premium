@@ -1,15 +1,15 @@
 import { getCloudModeLabel, getAppDiagnostics } from "../diagnostics.js";
-import { computeCoachRecommendations, getWeightEvolution } from "../recommendations.js";
+import { getSharedDashboardData } from "../insights.js";
 import { state } from "../state.js";
 import { APP_VERSION } from "../version.js";
-import { computeDashboardStats } from "../workout.js";
 import { escapeHtml, formatDateTime } from "../utils.js";
+import { icon } from "../ui.js";
 
 const TABS = [
-  { id: "profile", label: "Profil" },
-  { id: "coach", label: "Coach IA" },
-  { id: "sync", label: "Sync" },
-  { id: "app", label: "App" }
+  { id: "identity", label: "Identité" },
+  { id: "training", label: "Entraînement" },
+  { id: "nutrition", label: "Nutrition" },
+  { id: "ai-sync", label: "IA & Sync" }
 ];
 
 function summaryLine(profile) {
@@ -20,468 +20,521 @@ function summaryLine(profile) {
   ].filter(Boolean).join(" • ");
 }
 
-function renderProfileTab(profile, weightEvolution) {
-  const photoUrl = state.profilePhotoPreview || profile.photoDataUrl || "";
-  const initials = (profile.name || "MC")
+function athleteInitials(profile) {
+  return (profile?.name || "MF")
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() || "")
-    .join("") || "MC";
-  return `
-    <div class="card settings-section module-settings surface-settings">
-      <div class="settings-section-head">
-        <div>
-          <div class="eyebrow">Profil</div>
-          <h3>Profil athlète</h3>
-          <p class="muted">Panneaux pliables, saisie plus dense et lecture rapide sur iPhone.</p>
-        </div>
-        <span class="pill pill-alert">${escapeHtml(weightEvolution.currentWeightKg ? `${weightEvolution.currentWeightKg} kg` : "à compléter")}</span>
-      </div>
-
-      <div class="profile-folds">
-        <details class="profile-fold" open>
-          <summary>
-            <span class="profile-fold-head">
-              <strong>Photo</strong>
-              <small>Avatar et identité visuelle</small>
-            </span>
-            <span class="profile-fold-meta">${photoUrl ? "photo active" : "ajouter"}</span>
-          </summary>
-          <div class="profile-photo-row">
-            <div class="profile-avatar-shell compact-avatar-upload">
-              ${photoUrl
-                ? `<img class="profile-avatar-image" src="${photoUrl}" alt="Photo de profil" />`
-                : `<span class="profile-avatar-fallback">${escapeHtml(initials)}</span>`}
-            </div>
-            <div class="profile-hero-copy">
-              <p class="muted">Ajoute une photo carrée pour personnaliser le profil dans les écrans Accueil et Profil.</p>
-              <div class="profile-photo-actions">
-                <label class="btn btn-soft file-trigger">
-                  <input id="profilePhotoInput" type="file" accept="image/*" hidden />
-                  ${photoUrl ? "Changer" : "Ajouter"}
-                </label>
-                <button class="btn btn-outline" data-action="remove-profile-photo" ${photoUrl ? "" : "disabled"}>Retirer</button>
-              </div>
-            </div>
-          </div>
-        </details>
-
-        <details class="profile-fold" open>
-          <summary>
-            <span class="profile-fold-head">
-              <strong>Compte</strong>
-              <small>Nom, âge, poids</small>
-            </span>
-            <span class="profile-fold-meta">${escapeHtml(summaryLine(profile) || "incomplet")}</span>
-          </summary>
-          <div class="settings-grid compact-grid">
-            <div class="field-stack full-span">
-              <label class="field-label" for="profileName">Nom</label>
-              <div class="field-shell surface-form">
-                <span class="field-prefix">Identité</span>
-                <input id="profileName" type="text" placeholder="Ton prénom" value="${escapeHtml(profile.name || "")}" />
-              </div>
-            </div>
-            <div class="field-stack">
-              <label class="field-label" for="profileAge">Âge</label>
-              <div class="field-shell surface-form">
-                <span class="field-prefix">Ans</span>
-                <input id="profileAge" type="number" min="10" max="99" placeholder="29" value="${escapeHtml(profile.age || "")}" />
-              </div>
-            </div>
-            <div class="field-stack">
-              <label class="field-label" for="profileWeight">Poids</label>
-              <div class="field-shell surface-form">
-                <span class="field-prefix">Kg</span>
-                <input id="profileWeight" type="number" min="35" max="220" step="0.1" placeholder="74" value="${escapeHtml(profile.weightKg || "")}" />
-              </div>
-            </div>
-          </div>
-        </details>
-
-        <details class="profile-fold">
-          <summary>
-            <span class="profile-fold-head">
-              <strong>Préférences séance</strong>
-              <small>Objectif, niveau, fréquence</small>
-            </span>
-            <span class="profile-fold-meta">${escapeHtml(profile.goal || "muscle")} • ${escapeHtml(profile.sessionTime || "35")} min</span>
-          </summary>
-          <div class="settings-grid compact-grid">
-            <div class="field-stack">
-              <label class="field-label" for="profileGoal">Objectif</label>
-              <div class="field-shell surface-form">
-                <select id="profileGoal">
-                  ${["muscle", "force", "seche", "maintenance"].map((goal) => `<option value="${goal}" ${(profile.goal || "muscle") === goal ? "selected" : ""}>${escapeHtml(goal)}</option>`).join("")}
-                </select>
-              </div>
-            </div>
-            <div class="field-stack">
-              <label class="field-label" for="profileLevel">Niveau</label>
-              <div class="field-shell surface-form">
-                <select id="profileLevel">
-                  <option value="1" ${(profile.level || "2") === "1" ? "selected" : ""}>Débutant</option>
-                  <option value="2" ${(profile.level || "2") === "2" ? "selected" : ""}>Intermédiaire</option>
-                  <option value="3" ${(profile.level || "2") === "3" ? "selected" : ""}>Avancé</option>
-                </select>
-              </div>
-            </div>
-            <div class="field-stack">
-              <label class="field-label" for="profileFrequency">Fréquence</label>
-              <div class="field-shell surface-form">
-                <select id="profileFrequency">
-                  ${["2", "3", "4"].map((value) => `<option value="${value}" ${(profile.frequency || "3") === value ? "selected" : ""}>${escapeHtml(value)} séances</option>`).join("")}
-                </select>
-              </div>
-            </div>
-            <div class="field-stack">
-              <label class="field-label" for="profilePlace">Lieu</label>
-              <div class="field-shell surface-form">
-                <select id="profilePlace">
-                  ${["maison", "salle", "mixte"].map((value) => `<option value="${value}" ${(profile.place || "mixte") === value ? "selected" : ""}>${escapeHtml(value)}</option>`).join("")}
-                </select>
-              </div>
-            </div>
-            <div class="field-stack full-span">
-              <label class="field-label" for="profileSessionTime">Durée cible</label>
-              <div class="field-shell surface-form">
-                <select id="profileSessionTime">
-                  ${["20", "35", "45", "60"].map((value) => `<option value="${value}" ${(profile.sessionTime || "35") === value ? "selected" : ""}>${escapeHtml(value)} min</option>`).join("")}
-                </select>
-              </div>
-            </div>
-          </div>
-        </details>
-      </div>
-
-      <div class="helper-note info-note">${escapeHtml(weightEvolution.label)}</div>
-      <div class="actions-row profile-actions">
-        <button class="btn btn-main" data-action="save-profile">Enregistrer</button>
-        <button class="btn btn-outline btn-inline" data-action="open-onboarding">Onboarding</button>
-      </div>
-    </div>
-  `;
+    .join("") || "MF";
 }
 
-function renderCoachTab(aiRuntime, diagnostics) {
-  const runtimeLabel = aiRuntime.source === "local-fallback"
-    ? "Fallback local"
-    : getCloudModeLabel();
+function renderSummaryCard(shared, diagnostics) {
+  const photoUrl = state.profilePhotoPreview || shared.profile.photoDataUrl || "";
+
   return `
-    <div class="card settings-section module-settings surface-settings">
-      <div class="settings-section-head">
-        <div>
-          <div class="eyebrow">Coach IA</div>
-          <h3>Réglages IA</h3>
-          <p class="muted">Moins de décor, plus de contrôle: moteur, modèle, cloud et recherche web.</p>
-        </div>
-        <span class="pill pill-calm">${escapeHtml(runtimeLabel)}</span>
-      </div>
-
-      <div class="settings-subsection">
-        <div class="settings-subsection-head">
-          <div>
-            <div class="settings-subtitle">Moteur</div>
-            <p class="muted">Choisis le mode de génération et le modèle actif.</p>
+    <div class="card settings-hero module-settings surface-settings">
+      <div class="eyebrow">Profil Maya</div>
+      <div class="profile-summary-card">
+        <div class="profile-summary-main">
+          <div class="profile-summary-avatar">
+            ${photoUrl
+              ? `<img class="athlete-avatar-image" src="${photoUrl}" alt="Photo de profil" />`
+              : `<span class="athlete-avatar-fallback">${escapeHtml(athleteInitials(shared.profile))}</span>`}
           </div>
-        </div>
-        <div class="settings-grid">
-          <div class="field-stack">
-            <label class="field-label" for="iaProviderMode">Mode IA</label>
-            <div class="field-shell surface-form">
-              <select id="iaProviderMode">
-                <option value="local" ${state.aiConfig.mode === "local" ? "selected" : ""}>Local seulement</option>
-                <option value="proxy" ${state.aiConfig.mode === "proxy" ? "selected" : ""}>Internet sécurisé (recommandé)</option>
-                <option value="direct" ${state.aiConfig.mode === "direct" ? "selected" : ""}>Internet direct</option>
-              </select>
-            </div>
-          </div>
-          <div class="field-stack">
-            <label class="field-label" for="iaModel">Modèle</label>
-            <div class="field-shell surface-form">
-              <input id="iaModel" type="text" value="${escapeHtml(state.aiConfig.model)}" placeholder="gpt-4.1-mini" />
-            </div>
-          </div>
-          <div class="field-stack full-span">
-            <label class="field-label" for="iaWebSearch">Recherche web</label>
-            <div class="field-shell surface-form">
-              <select id="iaWebSearch">
-                <option value="off" ${state.aiConfig.webSearch ? "" : "selected"}>Désactivée</option>
-                <option value="on" ${state.aiConfig.webSearch ? "selected" : ""}>Activée en mode cloud</option>
-              </select>
+          <div class="profile-summary-copy">
+            <h2>${escapeHtml(shared.profile.name || "Profil athlète")}</h2>
+            <p class="muted">${escapeHtml(summaryLine(shared.profile) || "Complète ton profil pour connecter entraînement, suivi et nutrition.")}</p>
+            <div class="hero-chips">
+              <span class="pill">${shared.profileCompletion}% complété</span>
+              <span class="pill">${shared.stats.streak} jours de streak</span>
+              <span class="pill">${escapeHtml(shared.profile.goal || "muscle")}</span>
             </div>
           </div>
         </div>
-      </div>
 
-      <div class="settings-subsection">
-        <div class="settings-subsection-head">
-          <div>
-            <div class="settings-subtitle">Connectivité cloud</div>
-            <p class="muted">Brancher le proxy ou la clé directe sans mélanger ces réglages avec la génération du plan.</p>
-          </div>
-        </div>
-        <div class="settings-grid">
-          <div class="field-stack full-span">
-            <label class="field-label" for="iaProxyEndpoint">Endpoint proxy</label>
-            <div class="field-shell surface-form">
-              <input id="iaProxyEndpoint" type="text" value="${escapeHtml(state.aiConfig.proxyEndpoint)}" placeholder="http://localhost:8787/api/maya-coach" />
-            </div>
-          </div>
-          <div class="field-stack full-span">
-            <label class="field-label" for="iaApiKey">API key OpenAI</label>
-            <div class="field-shell surface-form">
-              <input id="iaApiKey" type="password" value="${escapeHtml(state.aiConfig.apiKey)}" placeholder="sk-..." />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="helper-note calm-note">
-        Internet sécurisé = appel cloud via ton proxy serveur.
-        • internet direct = appel OpenAI depuis le navigateur.
-        • local = moteur embarqué sans web.
-        <br />
-        Mode ${escapeHtml(getCloudModeLabel())}
-        • statut ${escapeHtml(aiRuntime.status || "idle")}
-        • latence ${aiRuntime.latencyMs || 0} ms
-        ${aiRuntime.lastCheckedAt ? `• ${escapeHtml(formatDateTime(aiRuntime.lastCheckedAt))}` : ""}
-        ${aiRuntime.error ? `• ${escapeHtml(aiRuntime.error)}` : ""}
-      </div>
-
-      ${diagnostics.proxyPublicBlocked ? `
-        <div class="helper-note alert-note">
-          Sur la version publique, le mode <strong>Internet sécurisé</strong> ne peut pas utiliser un endpoint <strong>localhost</strong>.
-          L’app repasse donc en local tant qu’aucun proxy public n’est déployé.
-        </div>
-      ` : ""}
-
-      <div class="actions-row two">
-        <button class="btn btn-main" data-action="save-ai-config">Sauvegarder IA</button>
-        <button class="btn btn-outline" data-action="test-ai-config">Tester la connexion</button>
-      </div>
-    </div>
-  `;
-}
-
-function renderSyncTab(syncRuntime, diagnostics) {
-  return `
-    <div class="card settings-section module-settings surface-settings">
-      <div class="settings-section-head">
-        <div>
-          <div class="eyebrow">Sync et notifications</div>
-          <h3>Continuité multi-appareils</h3>
-          <p class="muted">Une zone dédiée pour la synchronisation, les permissions et les actions de récupération.</p>
-        </div>
-        <span class="pill pill-success">${diagnostics.syncConfigured ? "prête" : "locale"}</span>
-      </div>
-
-      <div class="settings-subsection">
-        <div class="settings-subsection-head">
-          <div>
-            <div class="settings-subtitle">Données</div>
-            <p class="muted">Tout ce qui concerne l’endpoint, l’email de sync et la clé d’accès.</p>
-          </div>
-        </div>
-        <div class="settings-grid">
-          <div class="field-stack full-span">
-            <label class="field-label" for="syncEndpoint">Endpoint sync</label>
-            <div class="field-shell surface-form">
-              <input id="syncEndpoint" type="text" value="${escapeHtml(state.syncConfig.endpoint || "")}" placeholder="http://localhost:8788" />
-            </div>
-          </div>
-          <div class="field-stack">
-            <label class="field-label" for="syncEmail">Email</label>
-            <div class="field-shell surface-form">
-              <input id="syncEmail" type="email" value="${escapeHtml(state.syncConfig.email || "")}" placeholder="toi@email.com" />
-            </div>
-          </div>
-          <div class="field-stack">
-            <label class="field-label" for="syncAuto">Auto-sync</label>
-            <div class="field-shell surface-form">
-              <select id="syncAuto">
-                <option value="off" ${state.syncConfig.autoSync ? "" : "selected"}>Manuelle</option>
-                <option value="on" ${state.syncConfig.autoSync ? "selected" : ""}>Automatique</option>
-              </select>
-            </div>
-          </div>
-          <div class="field-stack full-span">
-            <label class="field-label" for="syncToken">Token sync</label>
-            <div class="field-shell surface-form">
-              <input id="syncToken" type="password" value="${escapeHtml(state.syncConfig.token || "")}" placeholder="token magic link" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="helper-note success-note">
-        Sync ${escapeHtml(syncRuntime.status || "idle")}
-        ${syncRuntime.lastSyncAt ? `• ${escapeHtml(formatDateTime(syncRuntime.lastSyncAt))}` : ""}
-        ${syncRuntime.error ? `• ${escapeHtml(syncRuntime.error)}` : ""}
-        • notifications ${escapeHtml(state.notificationConfig.permission || "default")}
-      </div>
-
-      <div class="settings-subsection">
-        <div class="settings-subsection-head">
-          <div>
-            <div class="settings-subtitle">Actions</div>
-            <p class="muted">Demandes manuelles de sync et activation locale des notifications.</p>
-          </div>
-        </div>
-      <div class="actions-row two">
-        <button class="btn btn-soft" data-action="save-sync-config">Sauvegarder la sync</button>
-        <button class="btn btn-outline" data-action="request-magic-link">Magic link</button>
-        <button class="btn btn-soft" data-action="push-sync">Envoyer mes données</button>
-        <button class="btn btn-outline" data-action="pull-sync">Récupérer mes données</button>
-        <button class="btn btn-soft" data-action="request-notifications">Activer les notifications</button>
-        <button class="btn btn-outline" data-action="go-page" data-page="history">Voir l’historique</button>
-      </div>
-      </div>
-    </div>
-  `;
-}
-
-function renderAppTab(diagnostics, stats, recommendations) {
-  return `
-    <div class="card settings-section module-settings surface-settings">
-      <div class="settings-section-head">
-        <div>
-          <div class="eyebrow">App et diagnostic</div>
-          <h3>Santé produit</h3>
-          <p class="muted">Etat du stockage, raccourcis secondaires et alertes coach regroupés au même endroit.</p>
-        </div>
-      </div>
-
-      <div class="settings-subsection">
-        <div class="settings-subsection-head">
-          <div>
-            <div class="settings-subtitle">Diagnostic</div>
-            <p class="muted">Lecture rapide de l’état stockage, réseau et dynamique d’usage.</p>
-          </div>
-        </div>
         <div class="settings-summary-grid">
           <div class="summary-chip summary-chip-blue">
-            <span class="summary-label">Stockage</span>
-            <strong>${diagnostics.storageOk ? "OK" : "Erreur"}</strong>
-          </div>
-          <div class="summary-chip summary-chip-coral">
-            <span class="summary-label">Internet</span>
-            <strong>${diagnostics.online ? "Connecté" : "Hors ligne"}</strong>
+            <span class="summary-label">Poids</span>
+            <strong>${escapeHtml(shared.weightEvolution.currentWeightKg ? `${shared.weightEvolution.currentWeightKg} kg` : "à renseigner")}</strong>
           </div>
           <div class="summary-chip summary-chip-green">
-            <span class="summary-label">Streak</span>
-            <strong>${stats.streak} jours</strong>
+            <span class="summary-label">Fuel</span>
+            <strong>${shared.fuelRatio}%</strong>
           </div>
-          <div class="summary-chip">
-            <span class="summary-label">Build</span>
-            <strong>${escapeHtml(APP_VERSION)}</strong>
+          <div class="summary-chip summary-chip-coral">
+            <span class="summary-label">Sync</span>
+            <strong>${diagnostics.supabaseConfigured && state.currentUser ? "cloud" : (diagnostics.supabaseConfigured ? "sécurisé" : "local dev")}</strong>
           </div>
         </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderIdentityTab(shared) {
+  const profile = shared.profile;
+  const photoUrl = state.profilePhotoPreview || profile.photoDataUrl || "";
+
+  return `
+    <div class="card settings-section module-settings surface-settings">
+      <div class="native-block-head">
+        <div>
+          <div class="eyebrow">Identité</div>
+          <h3>Profil athlète</h3>
+        </div>
+        <span class="pill pill-alert">${escapeHtml(shared.weightEvolution.currentWeightKg ? `${shared.weightEvolution.currentWeightKg} kg` : "à compléter")}</span>
       </div>
 
-      <div class="settings-subsection">
-        <div class="settings-subsection-head">
-          <div>
-            <div class="settings-subtitle">Raccourcis</div>
-            <p class="muted">Accès secondaires pour piloter l’app sans surcharger la home.</p>
+      <details class="settings-accordion" open>
+        <summary>
+          <span class="settings-accordion-copy">
+            <strong>Avatar & présence</strong>
+            <small>Photo de profil, aperçu et identité visuelle.</small>
+          </span>
+          <span class="settings-accordion-meta">${photoUrl ? "photo active" : "ajouter"}</span>
+        </summary>
+        <div class="profile-photo-row">
+          <div class="profile-avatar-shell compact-avatar-upload">
+            ${photoUrl
+              ? `<img class="profile-avatar-image" src="${photoUrl}" alt="Photo de profil" />`
+              : `<span class="profile-avatar-fallback">${escapeHtml(athleteInitials(profile))}</span>`}
+          </div>
+          <div class="profile-hero-copy">
+            <p class="muted">Ajoute une photo carrée pour personnaliser l’Accueil et le Profil.</p>
+            <div class="profile-photo-actions">
+              <label class="btn btn-soft file-trigger">
+                <input id="profilePhotoInput" type="file" accept="image/*" hidden />
+                ${photoUrl ? "Changer" : "Ajouter"}
+              </label>
+              <button class="btn btn-outline" data-action="remove-profile-photo" ${photoUrl ? "" : "disabled"}>Retirer</button>
+            </div>
           </div>
         </div>
-        <div class="settings-shortcuts">
-          <button class="shortcut-tile" data-action="go-page" data-page="history">
-            <span class="shortcut-title">Historique</span>
-            <span class="shortcut-sub">${stats.totalSessions} entrées</span>
-          </button>
-          <button class="shortcut-tile" data-action="go-page" data-page="stats">
-            <span class="shortcut-title">Stats</span>
-            <span class="shortcut-sub">${Math.round(stats.activeMinutes)} min actives</span>
-          </button>
-          <button class="shortcut-tile" data-action="go-page" data-page="favoris">
-            <span class="shortcut-title">Favoris</span>
-            <span class="shortcut-sub">${state.favorites.size} éléments</span>
-          </button>
+      </details>
+
+      <details class="settings-accordion" open>
+        <summary>
+          <span class="settings-accordion-copy">
+            <strong>Informations clés</strong>
+            <small>Nom, âge et poids utilisés dans le suivi et la nutrition.</small>
+          </span>
+          <span class="settings-accordion-meta">${escapeHtml(summaryLine(profile) || "incomplet")}</span>
+        </summary>
+        <div class="settings-grid compact-grid">
+          <div class="field-stack full-span">
+            <label class="field-label" for="profileName">Nom</label>
+            <div class="field-shell surface-form">
+              <span class="field-prefix">Identité</span>
+              <input id="profileName" type="text" placeholder="Ton prénom" value="${escapeHtml(profile.name || "")}" />
+            </div>
+          </div>
+          <div class="field-stack">
+            <label class="field-label" for="profileAge">Âge</label>
+            <div class="field-shell surface-form">
+              <span class="field-prefix">Ans</span>
+              <input id="profileAge" type="number" min="10" max="99" placeholder="29" value="${escapeHtml(profile.age || "")}" />
+            </div>
+          </div>
+          <div class="field-stack">
+            <label class="field-label" for="profileWeight">Poids</label>
+            <div class="field-shell surface-form">
+              <span class="field-prefix">Kg</span>
+              <input id="profileWeight" type="number" min="35" max="220" step="0.1" placeholder="74" value="${escapeHtml(profile.weightKg || "")}" />
+            </div>
+          </div>
         </div>
+      </details>
+
+      <div class="helper-note info-note">${escapeHtml(shared.weightEvolution.label)}</div>
+
+      <div class="actions-row two">
+        <button class="btn btn-main" data-action="save-profile">Enregistrer</button>
+        <button class="btn btn-outline" data-action="open-onboarding">Relancer l’onboarding</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderTrainingTab(shared) {
+  const profile = shared.profile;
+
+  return `
+    <div class="card settings-section module-settings surface-settings">
+      <div class="native-block-head">
+        <div>
+          <div class="eyebrow">Entraînement</div>
+          <h3>Préférences de séance</h3>
+        </div>
+        <span class="pill pill-calm">${escapeHtml(profile.goal || "muscle")} • ${escapeHtml(profile.sessionTime || "35")} min</span>
       </div>
 
-      <div class="settings-subsection">
-        <div class="settings-subsection-head">
-          <div>
-            <div class="settings-subtitle">Alertes coach</div>
-            <p class="muted">Les signaux les plus utiles, sans bruit visuel inutile.</p>
+      <details class="settings-accordion" open>
+        <summary>
+          <span class="settings-accordion-copy">
+            <strong>Objectif & niveau</strong>
+            <small>Ce que l’IA et le suivi utilisent comme cadre principal.</small>
+          </span>
+        </summary>
+        <div class="settings-grid compact-grid">
+          <div class="field-stack">
+            <label class="field-label" for="profileGoal">Objectif</label>
+            <div class="field-shell surface-form">
+              <select id="profileGoal">
+                ${["muscle", "force", "seche", "maintenance", "endurance"].map((goal) => `<option value="${goal}" ${profile.goal === goal ? "selected" : ""}>${escapeHtml(goal)}</option>`).join("")}
+              </select>
+            </div>
+          </div>
+          <div class="field-stack">
+            <label class="field-label" for="profileLevel">Niveau</label>
+            <div class="field-shell surface-form">
+              <select id="profileLevel">
+                <option value="1" ${profile.level === "1" ? "selected" : ""}>Débutant</option>
+                <option value="2" ${profile.level === "2" ? "selected" : ""}>Intermédiaire</option>
+                <option value="3" ${profile.level === "3" ? "selected" : ""}>Avancé</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-stack">
+            <label class="field-label" for="profileFrequency">Fréquence</label>
+            <div class="field-shell surface-form">
+              <select id="profileFrequency">
+                ${["2", "3", "4", "5"].map((value) => `<option value="${value}" ${profile.frequency === value ? "selected" : ""}>${escapeHtml(value)} séances</option>`).join("")}
+              </select>
+            </div>
+          </div>
+          <div class="field-stack">
+            <label class="field-label" for="profileSessionTime">Durée cible</label>
+            <div class="field-shell surface-form">
+              <select id="profileSessionTime">
+                ${["20", "35", "45", "60"].map((value) => `<option value="${value}" ${profile.sessionTime === value ? "selected" : ""}>${escapeHtml(value)} min</option>`).join("")}
+              </select>
+            </div>
           </div>
         </div>
-      <div class="list">
-        ${recommendations.length ? recommendations.map((item) => `
-          <div class="exercise-card recommendation-card recommendation-alert">
-            <div class="exercise-title">${escapeHtml(item.title)}</div>
-            <div class="muted">${escapeHtml(item.body)}</div>
+      </details>
+
+      <details class="settings-accordion">
+        <summary>
+          <span class="settings-accordion-copy">
+            <strong>Contexte d’entraînement</strong>
+            <small>Lieu, split préféré et tonalité du coach.</small>
+          </span>
+        </summary>
+        <div class="settings-grid compact-grid">
+          <div class="field-stack">
+            <label class="field-label" for="profilePlace">Lieu</label>
+            <div class="field-shell surface-form">
+              <select id="profilePlace">
+                ${["maison", "salle", "mixte"].map((value) => `<option value="${value}" ${profile.place === value ? "selected" : ""}>${escapeHtml(value)}</option>`).join("")}
+              </select>
+            </div>
           </div>
-        `).join("") : `<div class="helper-note calm-note">Aucune alerte prioritaire pour le moment.</div>`}
+          <div class="field-stack">
+            <label class="field-label" for="profilePreferredSplit">Split</label>
+            <div class="field-shell surface-form">
+              <select id="profilePreferredSplit">
+                ${["adaptive", "full-body", "upper-lower", "push-pull-legs"].map((value) => `<option value="${value}" ${profile.preferredSplit === value ? "selected" : ""}>${escapeHtml(value)}</option>`).join("")}
+              </select>
+            </div>
+          </div>
+          <div class="field-stack full-span">
+            <label class="field-label" for="profileCoachTone">Ton du coach</label>
+            <div class="field-shell surface-form">
+              <select id="profileCoachTone">
+                ${["direct", "motivant", "calme"].map((value) => `<option value="${value}" ${profile.coachTone === value ? "selected" : ""}>${escapeHtml(value)}</option>`).join("")}
+              </select>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <div class="helper-note calm-note">Objectif actuel: ${escapeHtml(profile.goal || "muscle")} • ${shared.weeklySummary.trainingSessions}/${shared.sessionTarget} séance(s) cette semaine.</div>
+
+      <div class="actions-row two">
+        <button class="btn btn-main" data-action="save-profile">Enregistrer</button>
+        <button class="btn btn-outline" data-action="go-page" data-page="ia">Voir le Coach</button>
       </div>
+    </div>
+  `;
+}
+
+function renderNutritionTab(shared) {
+  const profile = shared.profile;
+  const nutrition = shared.nutrition;
+
+  return `
+    <div class="card settings-section module-settings surface-settings">
+      <div class="native-block-head">
+        <div>
+          <div class="eyebrow">Nutrition</div>
+          <h3>Préférences et fuel</h3>
+        </div>
+        <span class="pill pill-success">${nutrition.totals.proteins} g prot</span>
+      </div>
+
+      <details class="settings-accordion" open>
+        <summary>
+          <span class="settings-accordion-copy">
+            <strong>Préférences alimentaires</strong>
+            <small>Relie ton profil aux recommandations nutrition et recovery.</small>
+          </span>
+        </summary>
+        <div class="settings-grid compact-grid">
+          <div class="field-stack">
+            <label class="field-label" for="profileFoodPreference">Type d’alimentation</label>
+            <div class="field-shell surface-form">
+              <select id="profileFoodPreference">
+                ${["omnivore", "vegetarien", "sans-lactose", "high-protein"].map((value) => `<option value="${value}" ${profile.foodPreference === value ? "selected" : ""}>${escapeHtml(value)}</option>`).join("")}
+              </select>
+            </div>
+          </div>
+          <div class="field-stack">
+            <label class="field-label" for="profileRecoveryPreference">Recovery</label>
+            <div class="field-shell surface-form">
+              <select id="profileRecoveryPreference">
+                ${["equilibre", "focus-sommeil", "focus-mobilite", "focus-respiration"].map((value) => `<option value="${value}" ${profile.recoveryPreference === value ? "selected" : ""}>${escapeHtml(value)}</option>`).join("")}
+              </select>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details class="settings-accordion">
+        <summary>
+          <span class="settings-accordion-copy">
+            <strong>Plan du jour</strong>
+            <small>Kcal, protéines et recettes suggérées reliées à la charge du jour.</small>
+          </span>
+        </summary>
+        <div class="settings-summary-grid">
+          <div class="summary-chip summary-chip-blue">
+            <span class="summary-label">Kcal</span>
+            <strong>${nutrition.totals.calories}</strong>
+          </div>
+          <div class="summary-chip summary-chip-green">
+            <span class="summary-label">Protéines</span>
+            <strong>${nutrition.totals.proteins} g</strong>
+          </div>
+          <div class="summary-chip summary-chip-coral">
+            <span class="summary-label">Charge</span>
+            <strong>${escapeHtml(nutrition.trainingLoad)}</strong>
+          </div>
+        </div>
+        <div class="meal-pill-list">
+          ${nutrition.dayPlan.meals.map((meal) => `
+            <div class="meal-pill">
+              <strong>${escapeHtml(meal.category)}</strong>
+              <span>${escapeHtml(meal.recipe.nom)}</span>
+            </div>
+          `).join("")}
+        </div>
+      </details>
+
+      <div class="actions-row two">
+        <button class="btn btn-main" data-action="save-profile">Enregistrer</button>
+        <button class="btn btn-outline" data-action="go-page" data-page="nutrition">Ouvrir Nutrition</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderAISyncTab(shared, diagnostics) {
+  const authLabel = state.currentUser?.email
+    ? `${state.currentUser.email} • ${state.authState.mode}`
+    : `Session ${state.authState.mode}`;
+  const flowiseStateLabel = state.flowiseConfig.status === "ready"
+    ? "actif"
+    : state.flowiseConfig.status === "fallback"
+      ? "fallback"
+      : "veille";
+
+  return `
+    <div class="card settings-section module-settings surface-settings">
+      <div class="native-block-head">
+        <div>
+          <div class="eyebrow">IA & Sync</div>
+          <h3>Colonne vertébrale data</h3>
+        </div>
+        <span class="pill pill-calm">${escapeHtml(getCloudModeLabel())}</span>
+      </div>
+
+      <details class="settings-accordion" open>
+        <summary>
+          <span class="settings-accordion-copy">
+            <strong>Coach IA</strong>
+            <small>Moteur actif, recherche web et disponibilité du coach.</small>
+          </span>
+          <span class="settings-accordion-meta">${escapeHtml(state.aiRuntime.status || "idle")}</span>
+        </summary>
+        <div class="settings-summary-grid">
+          <div class="summary-chip summary-chip-blue">
+            <span class="summary-label">Source</span>
+            <strong>${escapeHtml(getCloudModeLabel())}</strong>
+          </div>
+          <div class="summary-chip summary-chip-green">
+            <span class="summary-label">Modèle</span>
+            <strong>${escapeHtml(state.aiConfig.model)}</strong>
+          </div>
+          <div class="summary-chip summary-chip-coral">
+            <span class="summary-label">Web</span>
+            <strong>${state.aiConfig.webSearch ? "active" : "off"}</strong>
+          </div>
+        </div>
+        <div class="helper-note calm-note">
+          Coach ${escapeHtml(state.aiRuntime.status || "idle")}
+          • latence ${state.aiRuntime.latencyMs || 0} ms
+          ${state.aiRuntime.lastCheckedAt ? `• ${escapeHtml(formatDateTime(state.aiRuntime.lastCheckedAt))}` : ""}
+          ${state.aiRuntime.error ? `• ${escapeHtml(state.aiRuntime.error)}` : ""}
+        </div>
+        <div class="actions-row two">
+          <button class="btn btn-main" data-action="test-ai-config">Tester le coach</button>
+          <button class="btn btn-outline" data-action="go-page" data-page="ia">Ouvrir Coach</button>
+        </div>
+      </details>
+
+      <details class="settings-accordion">
+        <summary>
+          <span class="settings-accordion-copy">
+            <strong>Flowise chat flottant</strong>
+            <small>Chat style Messenger lié à la session utilisateur.</small>
+          </span>
+          <span class="settings-accordion-meta">${escapeHtml(flowiseStateLabel)}</span>
+        </summary>
+        <div class="settings-summary-grid">
+          <div class="summary-chip summary-chip-blue">
+            <span class="summary-label">Widget</span>
+            <strong>${diagnostics.flowiseConfigured ? "branché" : "en attente"}</strong>
+          </div>
+          <div class="summary-chip summary-chip-green">
+            <span class="summary-label">Session</span>
+            <strong>${escapeHtml((state.flowiseConfig.sessionId || "auto").slice(0, 18))}</strong>
+          </div>
+          <div class="summary-chip summary-chip-coral">
+            <span class="summary-label">Fallback</span>
+            <strong>${state.flowiseConfig.status === "ready" ? "off" : "coach app"}</strong>
+          </div>
+        </div>
+        <div class="helper-note ${state.flowiseConfig.status === "ready" ? "calm-note" : "alert-note"}">
+          Flowise ${escapeHtml(state.flowiseConfig.status || "idle")}
+          ${state.flowiseConfig.lastMountedAt ? `• ${escapeHtml(formatDateTime(state.flowiseConfig.lastMountedAt))}` : ""}
+          ${state.flowiseConfig.error ? `• ${escapeHtml(state.flowiseConfig.error)}` : ""}
+        </div>
+        <div class="actions-row two">
+          <button class="btn btn-main" data-action="reset-flowise-session">Nouvelle session</button>
+          <button class="btn btn-outline" data-action="sync-flowise-widget">Relancer le widget</button>
+        </div>
+      </details>
+
+      <details class="settings-accordion">
+        <summary>
+          <span class="settings-accordion-copy">
+            <strong>Compte & données</strong>
+            <small>Session, cloud, synchronisation et notifications produit.</small>
+          </span>
+          <span class="settings-accordion-meta">${escapeHtml(state.authState.status || "signed_out")}</span>
+        </summary>
+        <div class="settings-summary-grid">
+          <div class="summary-chip summary-chip-blue">
+            <span class="summary-label">Compte</span>
+            <strong>${escapeHtml(authLabel)}</strong>
+          </div>
+          <div class="summary-chip summary-chip-green">
+            <span class="summary-label">Sync</span>
+            <strong>${escapeHtml(state.syncRuntime.status || "idle")}</strong>
+          </div>
+          <div class="summary-chip summary-chip-coral">
+            <span class="summary-label">Stockage</span>
+            <strong>${diagnostics.supabaseConfigured ? "Supabase" : "local dev"}</strong>
+          </div>
+        </div>
+        <div class="helper-note success-note">
+          Sync ${escapeHtml(state.syncRuntime.status || "idle")}
+          ${state.syncRuntime.lastSyncAt ? `• ${escapeHtml(formatDateTime(state.syncRuntime.lastSyncAt))}` : ""}
+          ${state.syncRuntime.error ? `• ${escapeHtml(state.syncRuntime.error)}` : ""}
+          • notifications ${escapeHtml(state.notificationConfig.permission || "default")}
+        </div>
+        <div class="actions-row three">
+          <button class="btn btn-soft" data-action="push-sync">Forcer la sync</button>
+          <button class="btn btn-outline" data-action="pull-sync">Rafraîchir</button>
+          <button class="btn btn-soft" data-action="request-notifications">Notifications</button>
+          <button class="btn btn-outline" data-action="logout">Se déconnecter</button>
+        </div>
+      </details>
+
+      <details class="settings-accordion">
+        <summary>
+          <span class="settings-accordion-copy">
+            <strong>Supabase</strong>
+            <small>Socle produit interne: auth, Postgres, storage et temps réel.</small>
+          </span>
+          <span class="settings-accordion-meta">${diagnostics.supabaseConfigured ? "actif" : "non branché"}</span>
+        </summary>
+        <div class="settings-summary-grid">
+          <div class="summary-chip summary-chip-blue">
+            <span class="summary-label">Auth</span>
+            <strong>${diagnostics.supabaseConfigured ? "branché" : "non branché"}</strong>
+          </div>
+          <div class="summary-chip summary-chip-green">
+            <span class="summary-label">Schéma</span>
+            <strong>${state.supabaseConfig.schemaReady ? "prêt" : "à appliquer"}</strong>
+          </div>
+          <div class="summary-chip summary-chip-coral">
+            <span class="summary-label">Dernier check</span>
+            <strong>${state.supabaseConfig.lastCheckedAt ? escapeHtml(formatDateTime(state.supabaseConfig.lastCheckedAt)) : "jamais"}</strong>
+          </div>
+        </div>
+        <div class="helper-note ${state.supabaseConfig.status === "error" ? "alert-note" : "info-note"}">
+          Supabase ${escapeHtml(state.supabaseConfig.status || "idle")}
+          ${state.supabaseConfig.lastCheckedAt ? `• ${escapeHtml(formatDateTime(state.supabaseConfig.lastCheckedAt))}` : ""}
+          ${state.supabaseConfig.error ? `• ${escapeHtml(state.supabaseConfig.error)}` : ""}
+        </div>
+        <div class="actions-row two">
+          <button class="btn btn-main" data-action="test-supabase-config">Tester Supabase</button>
+          <button class="btn btn-outline" data-action="pull-sync">Recharger les données</button>
+        </div>
+      </details>
+
+      <div class="settings-summary-grid">
+        <div class="summary-chip summary-chip-blue">
+          <span class="summary-label">Build</span>
+          <strong>${escapeHtml(APP_VERSION)}</strong>
+        </div>
+        <div class="summary-chip summary-chip-green">
+          <span class="summary-label">Streak</span>
+          <strong>${shared.stats.streak} j</strong>
+        </div>
+        <div class="summary-chip summary-chip-coral">
+          <span class="summary-label">Stockage</span>
+          <strong>${diagnostics.storageOk ? "OK" : "Erreur"}</strong>
+        </div>
       </div>
     </div>
   `;
 }
 
 export function renderSettings(node) {
+  const shared = getSharedDashboardData();
   const diagnostics = getAppDiagnostics();
-  const stats = computeDashboardStats();
-  const profile = state.profile || {};
-  const weightEvolution = getWeightEvolution();
-  const recommendations = computeCoachRecommendations().slice(0, 3);
-  const activeTab = state.settingsTab || "profile";
-  const photoUrl = state.profilePhotoPreview || profile.photoDataUrl || "";
-  const initials = (profile.name || "MC")
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() || "")
-    .join("") || "MC";
+  const activeTab = ({
+    profile: "identity",
+    coach: "ai-sync",
+    sync: "ai-sync",
+    app: "ai-sync",
+    system: "ai-sync"
+  })[state.settingsTab] || state.settingsTab || "identity";
+  state.settingsTab = activeTab;
 
-  let panelHtml = renderProfileTab(profile, weightEvolution);
-  if (activeTab === "coach") panelHtml = renderCoachTab(state.aiRuntime, diagnostics);
-  if (activeTab === "sync") panelHtml = renderSyncTab(state.syncRuntime, diagnostics);
-  if (activeTab === "app") panelHtml = renderAppTab(diagnostics, stats, recommendations);
+  let panelHtml = renderIdentityTab(shared);
+  if (activeTab === "training") panelHtml = renderTrainingTab(shared);
+  if (activeTab === "nutrition") panelHtml = renderNutritionTab(shared);
+  if (activeTab === "ai-sync") panelHtml = renderAISyncTab(shared, diagnostics);
 
   node.innerHTML = `
     <div class="section settings-page">
-      <div class="card settings-hero module-settings surface-settings">
-        <div class="eyebrow">Pôle paramètres</div>
-        <div class="settings-hero-grid">
-          <div class="settings-identity-card">
-            <div class="settings-identity-avatar">
-              ${photoUrl
-                ? `<img class="athlete-avatar-image" src="${photoUrl}" alt="Photo de profil" />`
-                : `<span class="athlete-avatar-fallback">${escapeHtml(initials)}</span>`}
-            </div>
-            <div class="settings-identity-copy">
-              <h2>Paramètres, profil et pilotage</h2>
-              <p class="muted">Version iPhone compacte: profil, IA, sync et app dans un cockpit plus dense.</p>
-              <div class="hero-chips">
-                <span class="pill">${escapeHtml(summaryLine(profile) || "Profil à compléter")}</span>
-                <span class="pill">${escapeHtml(weightEvolution.currentWeightKg ? `${weightEvolution.currentWeightKg} kg` : "poids non suivi")}</span>
-              </div>
-            </div>
-          </div>
+      ${renderSummaryCard(shared, diagnostics)}
 
-          <div class="settings-summary-grid">
-            <div class="summary-chip summary-chip-blue">
-              <span class="summary-label">Profil</span>
-              <strong>${escapeHtml(summaryLine(profile) || "À compléter")}</strong>
-            </div>
-            <div class="summary-chip summary-chip-green">
-              <span class="summary-label">IA</span>
-              <strong>${escapeHtml(getCloudModeLabel())}</strong>
-            </div>
-            <div class="summary-chip summary-chip-coral">
-              <span class="summary-label">Sync</span>
-              <strong>${diagnostics.syncConfigured ? "Configurée" : "Locale"}</strong>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="settings-tabs">
+      <div class="settings-tabs profile-tab-strip">
         ${TABS.map((tab) => `
           <button class="settings-tab ${activeTab === tab.id ? "active" : ""}" data-action="go-settings-tab" data-tab="${tab.id}">
             ${escapeHtml(tab.label)}

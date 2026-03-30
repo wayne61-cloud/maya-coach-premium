@@ -1,7 +1,7 @@
 import { getCloudModeLabel, getAppDiagnostics } from "./diagnostics.js";
 import { getNutritionRegularity, inferTrainingLoad } from "./nutrition.js";
 import { state } from "./state.js";
-import { computeDashboardStats } from "./workout.js";
+import { buildCustomWorkoutCoachAlerts, computeDashboardStats } from "./workout.js";
 
 export function getWeightEvolution() {
   const snapshots = Array.isArray(state.profileSnapshots) ? state.profileSnapshots : [];
@@ -34,6 +34,7 @@ export function computeCoachRecommendations() {
   const latestTraining = state.history.find((entry) => entry.type === "training");
   const nutritionRegularity = getNutritionRegularity(7);
   const recommendations = [];
+  const customDraftBlocks = state.customWorkoutDraft?.blocks || [];
 
   if (!state.profile?.name || !state.profile?.age || !state.profile?.weightKg) {
     recommendations.push({
@@ -68,6 +69,21 @@ export function computeCoachRecommendations() {
       actionLabel: "Ouvrir Relax",
       actionPayload: { page: "relax" }
     });
+  }
+
+  if (customDraftBlocks.length >= 3) {
+    const customAlert = buildCustomWorkoutCoachAlerts(state.customWorkoutDraft)[0];
+    if (customAlert) {
+      recommendations.push({
+        id: "manual-session-alert",
+        priority: 88,
+        title: customAlert.title,
+        body: customAlert.body,
+        action: "go-page",
+        actionLabel: "Ma séance",
+        actionPayload: { page: "my-session" }
+      });
+    }
   }
 
   if (latestTraining && inferTrainingLoad(latestTraining) === "high") {
