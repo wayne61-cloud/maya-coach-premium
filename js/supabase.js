@@ -2065,9 +2065,10 @@ export async function deleteAdminUserPhotos(profileId) {
   return state.adminRuntime;
 }
 
-export async function setAdminUserStatus(profileId, status) {
+export async function setAdminUserStatus(profileId, status, reason = "") {
   requireAdminAccess();
   const safeStatus = ["pending", "active", "suspended", "banned"].includes(status) ? status : "active";
+  const safeReason = String(reason || "").trim();
   if (isManagedBackendMode()) {
     if (state.currentUser?.id === profileId && safeStatus !== "active") {
       throw new Error("Impossible de désactiver le compte admin connecté.");
@@ -2075,7 +2076,8 @@ export async function setAdminUserStatus(profileId, status) {
     await backendRequest(`/api/admin/users/${encodeURIComponent(profileId)}/status`, {
       method: "PATCH",
       body: {
-        status: safeStatus
+        status: safeStatus,
+        reason: safeReason
       }
     });
     return refreshAdminDashboard();
@@ -2094,8 +2096,12 @@ export async function setAdminUserStatus(profileId, status) {
           moderation_reason: "",
           deleted_at: null
         }
-      : {})
+      : {
+          moderation_reason: safeReason || undefined
+        })
   };
+  // Remove undefined keys
+  Object.keys(updatePayload).forEach((key) => updatePayload[key] === undefined && delete updatePayload[key]);
   const { error } = await client
     .from("profiles")
     .update(updatePayload)

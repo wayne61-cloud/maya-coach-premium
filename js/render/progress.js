@@ -3,6 +3,28 @@ import { buildEmptyState, dayKey, escapeHtml, formatShortDate } from "../utils.j
 import { icon } from "../ui.js";
 import { renderPhotoViewer } from "./photo-viewer.js";
 
+function findSessionForDate(dateStr) {
+  if (!dateStr || !state.history?.length) return null;
+  const target = dayKey(dateStr);
+  return state.history.find((entry) => entry.type === "training" && dayKey(entry.date) === target) || null;
+}
+
+function renderSessionInfo(session) {
+  if (!session) return "";
+  const parts = [
+    session.title || "Séance",
+    session.durationRealMin ? `${session.durationRealMin} min` : "",
+    session.zone || "",
+    session.coachNote || ""
+  ].filter(Boolean);
+  return `
+    <div class="progress-photo-session-info">
+      <strong>Séance du jour</strong><br/>
+      ${escapeHtml(parts.join(" · "))}
+    </div>
+  `;
+}
+
 function renderTimeline(entries, dayActivityCounts) {
   if (!entries.length) {
     return buildEmptyState(
@@ -15,7 +37,9 @@ function renderTimeline(entries, dayActivityCounts) {
 
   return `
     <div class="progress-photo-timeline">
-      ${entries.map((entry) => `
+      ${entries.map((entry) => {
+        const session = findSessionForDate(entry.date);
+        return `
         <article class="progress-photo-card">
           <button class="progress-photo-media photo-media-button" type="button" data-action="open-photo-viewer" data-source="progress" data-id="${escapeHtml(entry.id)}" aria-label="Ouvrir la photo ${escapeHtml(entry.zone)} du ${escapeHtml(formatShortDate(entry.date))}">
             <img src="${entry.photoDataUrl}" alt="Progression ${escapeHtml(entry.zone)} du ${escapeHtml(formatShortDate(entry.date))}" loading="lazy" decoding="async" />
@@ -32,12 +56,13 @@ function renderTimeline(entries, dayActivityCounts) {
               ${(dayActivityCounts.get(dayKey(entry.date)) || 0) ? `<span class="pill">${dayActivityCounts.get(dayKey(entry.date))} activité(s) ce jour-là</span>` : ""}
             </div>
             ${entry.note ? `<p class="muted">${escapeHtml(entry.note)}</p>` : ""}
+            ${renderSessionInfo(session)}
             <div class="actions-row">
               <button class="btn btn-outline" type="button" data-action="open-photo-viewer" data-source="progress" data-id="${escapeHtml(entry.id)}">Voir en grand</button>
             </div>
           </div>
         </article>
-      `).join("")}
+      `}).join("")}
     </div>
   `;
 }
@@ -47,7 +72,7 @@ export function renderProgress(node) {
   const entries = [...(state.visualProgressEntries || [])].sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime());
   const latestEntry = entries[0] || null;
   const timelineEntries = [...entries].sort((left, right) => new Date(left.date).getTime() - new Date(right.date).getTime());
-  const dayActivityCounts = state.history.reduce((accumulator, entry) => {
+  const dayActivityCounts = (state.history || []).reduce((accumulator, entry) => {
     const key = dayKey(entry.date);
     if (!key) return accumulator;
     accumulator.set(key, (accumulator.get(key) || 0) + 1);

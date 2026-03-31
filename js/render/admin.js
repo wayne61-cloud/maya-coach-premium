@@ -403,7 +403,8 @@ function renderDetailPhotos() {
 
   return `
     <div class="list">
-      ${detailPhotos.map((photo) => `
+      ${detailPhotos.map((photo) => {
+        return `
         <article class="progress-photo-card admin-photo-card">
           <button class="progress-photo-media photo-media-button" type="button" data-action="open-photo-viewer" data-source="admin" data-id="${escapeHtml(photo.id)}" aria-label="Ouvrir la photo ${escapeHtml(photo.zone || "progression")}">
             <img src="${escapeHtml(photo.photoDataUrl || "")}" alt="Photo ${escapeHtml(photo.zone || "")}" loading="lazy" decoding="async" />
@@ -426,7 +427,7 @@ function renderDetailPhotos() {
             </div>
           </div>
         </article>
-      `).join("")}
+      `}).join("")}
     </div>
   `;
 }
