@@ -1,9 +1,9 @@
 import {
   RUNNER_BADGES,
+  RUNNER_CAPABILITIES,
   RUNNER_DASHBOARD,
   RUNNER_INJURY_PLAYBOOK,
   RUNNER_SESSIONS,
-  RUNNER_STACK_LINKS,
   RUNNER_STRENGTH_BLOCKS
 } from "../../data/runner.js";
 import { getSharedDashboardData } from "../insights.js";
@@ -39,7 +39,7 @@ function renderRoutePreview() {
     <div class="runner-map-card">
       <div class="runner-map-copy">
         <strong>Tracking live</strong>
-        <span>Overlay stats + coaching audio comme une vraie app interne.</span>
+        <span>Stats en temps réel et coaching audio pendant ta sortie.</span>
       </div>
       <svg class="runner-map-svg" viewBox="0 0 104 88" preserveAspectRatio="none" aria-hidden="true">
         <defs>
@@ -71,8 +71,8 @@ export function renderRunnerHome(node) {
         <div class="runner-hero-top">
           <div>
             <div class="eyebrow">RUNNER OS</div>
-            <h2>Le pôle runner devient une app dans l'app</h2>
-            <p>Ambiance dédiée, logique performance, tracking live, prévention et identité coureur reliés au recovery global.</p>
+            <h2>Mode Runner</h2>
+            <p>Tracking live, coaching adaptatif, charge et recovery connectés à tout ton profil MAYA.</p>
           </div>
           <span class="runner-status-pill">${escapeHtml(RUNNER_DASHBOARD.objective)}</span>
         </div>
@@ -165,8 +165,8 @@ export function renderRunnerCoach(node) {
         <div class="runner-hero-top">
           <div>
             <div class="eyebrow">Coach Running</div>
-            <h2>Le cerveau qui ajuste le run</h2>
-            <p>Il pilote allure, volume, prévention blessure et coaching audio sans casser l'immersion.</p>
+            <h2>Coaching intelligent</h2>
+            <p>Allure, volume et prévention blessure ajustés en direct selon ta forme du jour.</p>
           </div>
         </div>
         ${renderRunnerTabs("runner-coach")}
@@ -206,19 +206,24 @@ export function renderRunnerCoach(node) {
         </article>
       </div>
 
-      <article class="runner-surface-card">
+      <article class="runner-surface-card runner-os-card">
         <div class="runner-block-head">
           <div>
-            <span class="eyebrow">Plug & play stack</span>
-            <h3>Architecture branchable depuis l'app</h3>
+            <span class="eyebrow">RUNNER OS</span>
+            <h3>Le moteur course intégré de MAYA</h3>
           </div>
+          <span class="runner-status-pill">Natif</span>
         </div>
-        <div class="runner-stack-grid">
-          ${RUNNER_STACK_LINKS.map((item) => `
-            <a class="runner-stack-card" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">
-              <strong>${escapeHtml(item.label)}</strong>
-              <span>${escapeHtml(item.caption)}</span>
-            </a>
+        <p class="muted" style="margin-top:8px">Tracking réel, coaching actif, données connectées. Tout est déjà là, tout fonctionne ensemble.</p>
+        <div class="runner-capability-grid">
+          ${RUNNER_CAPABILITIES.map((item) => `
+            <div class="runner-capability-card">
+              <span class="runner-capability-icon">${icon(item.icon, "", 18)}</span>
+              <div>
+                <strong>${escapeHtml(item.label)}</strong>
+                <span>${escapeHtml(item.caption)}</span>
+              </div>
+            </div>
           `).join("")}
         </div>
       </article>
@@ -233,8 +238,8 @@ export function renderRunnerSessions(node) {
         <div class="runner-hero-top">
           <div>
             <div class="eyebrow">Séances Runner</div>
-            <h2>Le coeur produit</h2>
-            <p>Fractionné, endurance, tempo, long run et côtes avec mode audio et feedback visuel.</p>
+            <h2>Tes séances</h2>
+            <p>Fractionné, endurance, tempo, sortie longue et côtes avec coaching audio en direct.</p>
           </div>
         </div>
         ${renderRunnerTabs("runner-sessions")}
@@ -297,8 +302,8 @@ export function renderRunnerPerformance(node) {
         <div class="runner-hero-top">
           <div>
             <div class="eyebrow">Suivi & performance</div>
-            <h2>Charge, VO2, pacing, identité</h2>
-            <p>Version premium du suivi running: tu vois la progression, mais aussi le risque associé.</p>
+            <h2>Ta progression</h2>
+            <p>Charge, allure, VO2 et prévention en un coup d'oeil. Progresse sans risque.</p>
           </div>
         </div>
         ${renderRunnerTabs("runner-performance")}

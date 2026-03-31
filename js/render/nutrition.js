@@ -379,20 +379,19 @@ function renderRecipeDetailSheet() {
 
   return `
     <div class="sheet-backdrop" data-action="close-recipe-detail"></div>
-    <div class="bottom-sheet nutrition-detail-sheet">
+    <div class="bottom-sheet nutrition-detail-sheet nutrition-detail-fullscreen">
       <div class="sheet-handle"></div>
-      <div class="sheet-head">
-        <div>
+
+      <div class="nutrition-detail-hero-wrap">
+        <img class="nutrition-detail-hero" src="${escapeHtml(getYouTubeThumbnail(recipe.videoId))}" alt="${escapeHtml(recipe.nom)}" loading="lazy" decoding="async" />
+        <div class="nutrition-detail-hero-overlay">
           <div class="eyebrow">${escapeHtml(getCategoryLabel(recipe.categorie))}</div>
-          <h3>${escapeHtml(recipe.nom)}</h3>
-          <p class="muted">${recipe.temps} min · ${recipe.prot} g prot · ${recipe.calories} kcal</p>
+          <h3 class="nutrition-detail-title">${escapeHtml(recipe.nom)}</h3>
         </div>
-        <button class="ghost-link" data-action="close-recipe-detail">Fermer</button>
+        <button class="nutrition-detail-close" data-action="close-recipe-detail">Fermer</button>
       </div>
 
-      <img class="nutrition-detail-hero" src="${escapeHtml(getYouTubeThumbnail(recipe.videoId))}" alt="${escapeHtml(recipe.nom)}" loading="lazy" decoding="async" />
-
-      <div class="exercise-meta">
+      <div class="exercise-meta nutrition-detail-badges">
         <span class="pill">${recipe.temps} min</span>
         <span class="pill">${recipe.prot} g protéines</span>
         <span class="pill">${recipe.calories} kcal</span>

@@ -146,30 +146,35 @@ export const RUNNER_BADGES = [
   { id: "runner_endurance", title: "Endurance beast", detail: "Plus de 35 km sur la semaine." }
 ];
 
-export const RUNNER_STACK_LINKS = [
+export const RUNNER_CAPABILITIES = [
   {
-    label: "Here2Run",
-    caption: "tracking GPS temps réel, historique, SQLite local",
-    url: "https://github.com/ArtemOrlovUA/Here2Run"
+    icon: "target",
+    label: "Tracking GPS réel",
+    caption: "Distance, allure et tracé en temps réel à chaque sortie."
   },
   {
-    label: "React Native Maps",
-    caption: "tracé, polylines, animations map",
-    url: "https://github.com/react-native-maps/react-native-maps"
+    icon: "spark",
+    label: "Coaching audio adaptatif",
+    caption: "Retours vocaux live basés sur ton allure, ta zone et ta fatigue."
   },
   {
-    label: "PubNub",
-    caption: "live tracking multi-coureurs et défis temps réel",
-    url: "https://www.pubnub.com/blog/realtime-geo-tracking-app-react-native/"
+    icon: "heart",
+    label: "Recovery connecté",
+    caption: "Sommeil, nutrition et charge musculaire influencent chaque séance."
   },
   {
-    label: "Geo Tracking System",
-    caption: "backend Node/Mongo pour runs stockés et auth",
-    url: "https://github.com/Uyadav207/Geolocation-Tracking-System"
+    icon: "timer",
+    label: "Séances live guidées",
+    caption: "Fractionné, tempo, endurance avec feedback visuel et audio."
   },
   {
-    label: "Route Tracker",
-    caption: "route preview et historique type Strava",
-    url: "https://github.com/Jon1VK/running-route-tracker"
+    icon: "cloud",
+    label: "Charge & progression",
+    caption: "Volume hebdo, tendance d'allure et risque de surcharge en un coup d'œil."
+  },
+  {
+    icon: "badge",
+    label: "Profil global synchronisé",
+    caption: "Tes runs alimentent badges, nutrition et recovery dans tout MAYA."
   }
 ];
