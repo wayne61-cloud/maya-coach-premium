@@ -174,7 +174,7 @@ alter table profiles add column if not exists account_status text not null defau
 alter table profiles add column if not exists bio text not null default '';
 alter table profiles add column if not exists moderation_reason text not null default '';
 alter table profiles add column if not exists deleted_at timestamptz;
-alter table profiles alter column account_status set default 'active';
+alter table profiles alter column account_status set default 'pending';
 
 do $$
 begin
@@ -571,7 +571,7 @@ set search_path = public
 as $$
 declare
   next_role text := 'user';
-  next_status text := 'active';
+  next_status text := 'pending';
 begin
   insert into public.profiles (
     auth_user_id,

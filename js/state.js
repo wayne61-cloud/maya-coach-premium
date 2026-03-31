@@ -269,6 +269,15 @@ export const state = {
   exoFilter: { search: "", mode: "all", muscle: "all", similarTo: "" },
   noushiFilter: { place: "mixte" },
   nutritionFilter: { search: "", category: "all", goal: "all", tag: "all" },
+  nutritionView: "plan",
+  nutritionDetailRecipeId: "",
+  nutritionVideoRecipeId: "",
+  nutritionFeedLimit: 8,
+  runnerState: {
+    goal: "semi",
+    focus: "all",
+    readiness: "stable"
+  },
   favorites: new Set(loadJSON(STORAGE_KEYS.favorites, [])),
   history: loadJSON(STORAGE_KEYS.history, []),
   nutritionProfile: loadJSON(STORAGE_KEYS.nutritionProfile, null),

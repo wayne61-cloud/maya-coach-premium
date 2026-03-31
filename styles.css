@@ -42,6 +42,623 @@
   --keyboard-offset: 0px;
 }
 
+.nav-btn[data-page="runner-home"].active {
+  color: #9bf2dc;
+}
+
+.quick-nav[data-group="runner"] .quick-nav-group[data-group="runner"] {
+  display: flex;
+}
+
+.quick-nav-btn[data-page="runner-home"].active,
+.quick-nav-btn[data-page="runner-sessions"].active,
+.quick-nav-btn[data-page="runner-performance"].active,
+.quick-nav-btn[data-page="runner-coach"].active {
+  background: rgba(27, 167, 140, 0.22);
+  border-color: rgba(126, 233, 203, 0.36);
+}
+
+.nutrition-premium-screen {
+  gap: 14px;
+}
+
+.nutrition-premium-shell,
+.nutrition-section-card {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: linear-gradient(180deg, rgba(17, 19, 22, 0.96), rgba(12, 14, 17, 0.92));
+  border-radius: 28px;
+  padding: 18px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.24);
+}
+
+.nutrition-header-minimal,
+.nutrition-section-head,
+.runner-block-head,
+.runner-hero-top,
+.runner-map-copy {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.nutrition-header-minimal h2,
+.nutrition-section-head h3,
+.runner-hero-top h2,
+.runner-block-head h3,
+.noushi-elite-head h3 {
+  margin: 4px 0 0;
+  font-size: 1.15rem;
+}
+
+.nutrition-header-minimal .eyebrow,
+.nutrition-section-head .eyebrow,
+.runner-block-head .eyebrow,
+.runner-hero-top .eyebrow,
+.noushi-elite-head .eyebrow {
+  letter-spacing: 0.08em;
+}
+
+.nutrition-topbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.premium-search-shell {
+  min-height: 48px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.nutrition-view-switch {
+  display: inline-grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 14px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.nutrition-view-btn {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  padding: 10px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.nutrition-view-btn.active {
+  background: rgba(127, 211, 127, 0.14);
+  color: #dbffe0;
+}
+
+.nutrition-summary-line {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 14px;
+}
+
+.nutrition-summary-line strong {
+  font-size: 1.02rem;
+  font-weight: 600;
+}
+
+.nutrition-summary-line strong span,
+.nutrition-summary-line > span {
+  color: rgba(255, 255, 255, 0.66);
+}
+
+.nutrition-builder-grid {
+  margin-top: 14px;
+  align-items: end;
+}
+
+.nutrition-validate-btn {
+  min-height: 46px;
+}
+
+.nutrition-timeline {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.nutrition-timeline-item {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 6px;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nutrition-timeline-item:last-child {
+  border-bottom: 0;
+}
+
+.nutrition-timeline-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #92eca0;
+  box-shadow: 0 0 0 6px rgba(146, 236, 160, 0.12);
+}
+
+.nutrition-timeline-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.nutrition-timeline-copy span,
+.nutrition-feed-head p,
+.nutrition-feed-moment,
+.runner-feature-list span,
+.runner-stack-card span,
+.runner-insight-row span,
+.runner-badge-card span {
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.nutrition-timeline-arrow {
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.nutrition-feed-list,
+.nutrition-courses-list,
+.runner-session-grid,
+.runner-strength-grid,
+.runner-stack-grid,
+.runner-badge-grid,
+.noushi-elite-stack {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.nutrition-feed-card {
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr);
+  gap: 14px;
+  padding: 12px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.nutrition-feed-thumb,
+.nutrition-detail-hero {
+  width: 100%;
+  object-fit: cover;
+  border-radius: 20px;
+  aspect-ratio: 1 / 1;
+}
+
+.nutrition-detail-hero {
+  margin-top: 14px;
+  aspect-ratio: 16 / 9;
+}
+
+.nutrition-feed-copy,
+.nutrition-feed-head,
+.nutrition-feed-tags,
+.nutrition-feed-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.nutrition-feed-head {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.nutrition-feed-head h3,
+.runner-session-card h3,
+.runner-strength-card strong,
+.runner-badge-card strong {
+  margin: 0;
+}
+
+.nutrition-feed-tags,
+.runner-chip-row,
+.runner-badge-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.nutrition-feed-actions {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.nutrition-feed-more {
+  margin-top: 14px;
+  display: flex;
+  justify-content: center;
+}
+
+.nutrition-course-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.nutrition-course-item small {
+  grid-column: 2;
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.nutrition-detail-sheet {
+  max-width: min(780px, calc(100vw - 20px));
+}
+
+.nutrition-detail-video {
+  margin-top: 14px;
+}
+
+.nutrition-video-preview {
+  border: 0;
+  width: 100%;
+  padding: 0;
+  border-radius: 22px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  cursor: pointer;
+}
+
+.nutrition-video-preview img {
+  width: 100%;
+  display: block;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.nutrition-video-preview span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  padding: 12px;
+}
+
+.nutrition-detail-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 14px;
+}
+
+.nutrition-detail-grid > div {
+  padding: 14px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.noushi-elite-group,
+.noushi-impossible-card,
+.runner-hero-card,
+.runner-surface-card,
+.runner-session-card,
+.runner-strength-card,
+.runner-badge-card,
+.runner-stack-card {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: linear-gradient(180deg, rgba(16, 18, 22, 0.96), rgba(9, 11, 13, 0.94));
+  border-radius: 28px;
+  padding: 18px;
+}
+
+.noushi-elite-head p,
+.runner-hero-top p,
+.runner-surface-card .muted,
+.runner-strength-card p {
+  margin: 6px 0 0;
+}
+
+.noushi-elite-gallery {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.noushi-elite-gallery img {
+  width: 100%;
+  border-radius: 18px;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+}
+
+.noushi-elite-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.noushi-elite-item {
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.025);
+  overflow: hidden;
+}
+
+.noushi-elite-item summary {
+  list-style: none;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+}
+
+.noushi-elite-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.noushi-elite-item summary span {
+  display: grid;
+  gap: 4px;
+}
+
+.noushi-elite-item summary small {
+  color: rgba(255, 255, 255, 0.66);
+}
+
+.noushi-elite-content {
+  display: grid;
+  gap: 12px;
+  padding: 0 14px 14px;
+}
+
+.noushi-top-five {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding-left: 18px;
+}
+
+.runner-screen {
+  gap: 14px;
+}
+
+.app[data-page^="runner"] .header,
+.app[data-page^="runner"] .bottom-nav {
+  background: rgba(7, 15, 16, 0.92);
+  border-color: rgba(126, 233, 203, 0.12);
+}
+
+.runner-hero-card {
+  background:
+    radial-gradient(circle at top right, rgba(27, 167, 140, 0.22), transparent 34%),
+    linear-gradient(180deg, rgba(8, 18, 18, 0.98), rgba(8, 11, 12, 0.96));
+}
+
+.runner-status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(126, 233, 203, 0.14);
+  color: #dcfff4;
+}
+
+.runner-subnav {
+  display: inline-grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 16px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.runner-subnav-btn {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.68);
+  padding: 10px 14px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.runner-subnav-btn.active {
+  background: rgba(126, 233, 203, 0.16);
+  color: #effff9;
+}
+
+.runner-metric-grid,
+.runner-hero-grid,
+.runner-support-grid,
+.runner-coach-grid,
+.runner-performance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.runner-metric-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.runner-metric-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.runner-metric-card span,
+.runner-session-footer span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.74);
+}
+
+.runner-metric-card strong {
+  font-size: 1.05rem;
+}
+
+.runner-map-card,
+.runner-audio-card {
+  padding: 18px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.runner-map-svg {
+  width: 100%;
+  margin-top: 14px;
+}
+
+.runner-map-svg rect {
+  fill: rgba(8, 17, 18, 0.76);
+  stroke: rgba(126, 233, 203, 0.12);
+}
+
+.runner-map-grid {
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-width: 0.8;
+}
+
+.runner-map-path {
+  fill: none;
+  stroke: url(#runnerPath);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.runner-map-svg circle {
+  fill: #9bf2dc;
+  stroke: rgba(10, 16, 16, 0.95);
+  stroke-width: 2;
+}
+
+.runner-map-stats,
+.runner-audio-list,
+.runner-feature-list,
+.runner-playbook-list {
+  display: grid;
+  gap: 8px;
+}
+
+.runner-map-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 12px;
+}
+
+.runner-map-stats span,
+.runner-playbook-card,
+.runner-insight-row {
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.runner-audio-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.runner-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.runner-feature-list div,
+.runner-session-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.runner-session-card,
+.runner-strength-card,
+.runner-badge-card,
+.runner-stack-card {
+  display: grid;
+  gap: 10px;
+}
+
+.runner-stack-card {
+  text-decoration: none;
+  color: inherit;
+}
+
+.runner-rings-card {
+  display: grid;
+  align-items: center;
+}
+
+.runner-chart-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.runner-badge-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+  .runner-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .runner-hero-grid,
+  .runner-support-grid,
+  .runner-coach-grid,
+  .runner-performance-grid,
+  .nutrition-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .nutrition-topbar,
+  .nutrition-feed-card,
+  .runner-subnav,
+  .runner-metric-grid,
+  .runner-map-stats,
+  .runner-badge-grid,
+  .noushi-elite-gallery {
+    grid-template-columns: 1fr;
+  }
+
+  .nutrition-feed-card {
+    grid-template-columns: 1fr;
+  }
+
+  .nutrition-view-switch {
+    width: 100%;
+  }
+}
+
 * {
   box-sizing: border-box;
   margin: 0;

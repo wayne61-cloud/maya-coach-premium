@@ -1,47 +1,79 @@
 import { getAllRecipeTags, hasValidVideoId, searchRecipes } from "../catalog.js";
 import { getSharedDashboardData } from "../insights.js";
+import { buildNutritionGroceryList } from "../nutrition.js";
 import { ensureLiteYouTubeEmbed } from "../lite-youtube.js";
 import { state } from "../state.js";
 import { buildEmptyState, escapeHtml, getYouTubeThumbnail, getYouTubeUrl } from "../utils.js";
 import { icon, renderNumberTicker } from "../ui.js";
 
-function renderRecipeVideo(recipe) {
-  if (!recipe.videoId) {
-    return `<div class="video-missing">Vidéo recette non renseignée.</div>`;
+const NUTRITION_VIEWS = [
+  ["plan", "Plan du jour"],
+  ["recipes", "Recettes"],
+  ["courses", "Courses"]
+];
+
+function getLoadLabel(load) {
+  return {
+    low: "charge basse",
+    medium: "charge moyenne",
+    high: "charge haute"
+  }[load] || `charge ${load}`;
+}
+
+function getCategoryLabel(category) {
+  return {
+    "petit-dej": "Petit-déj",
+    dejeuner: "Déjeuner",
+    collation: "Collation",
+    diner: "Dîner"
+  }[category] || category;
+}
+
+function buildRecipeTips(recipe) {
+  const tips = [];
+  if (recipe.tags.includes("pre-workout")) {
+    tips.push("Pré-séance: garde-la 60 à 90 min avant un effort intense pour rester léger.");
   }
-  if (hasValidVideoId(recipe.videoId)) {
-    return `<lite-youtube videoid="${escapeHtml(recipe.videoId)}" title="${escapeHtml(recipe.nom)}" playlabel="Lire la vidéo ${escapeHtml(recipe.nom)}" params="rel=0&modestbranding=2"></lite-youtube>`;
+  if (recipe.tags.includes("post-workout")) {
+    tips.push("Post-séance: cale-la dans les 2 heures après l'entraînement pour faciliter la récup.");
   }
+  if (recipe.tags.includes("batch-cooking")) {
+    tips.push("Batch cooking: double les portions et garde 2 à 3 jours au frais.");
+  }
+  if (!tips.length) {
+    tips.push("Version simple à tenir: prépare les ingrédients la veille pour éviter les écarts.");
+  }
+  return tips;
+}
+
+function renderNutritionSummary(shared) {
   return `
-    <a class="video-fallback" href="${getYouTubeUrl(recipe.videoId)}" target="_blank" rel="noreferrer">
-      <img src="${getYouTubeThumbnail(recipe.videoId)}" alt="${escapeHtml(recipe.nom)}" />
-    </a>
+    <div class="nutrition-summary-line">
+      <strong>
+        ${renderNumberTicker(shared.nutrition.totals.calories)} kcal
+        <span>·</span>
+        ${renderNumberTicker(shared.nutrition.totals.proteins, { suffix: " g" })} protéines
+        <span>·</span>
+        ${escapeHtml(getLoadLabel(shared.nutrition.trainingLoad))}
+      </strong>
+      <span>objectif : ${escapeHtml(shared.nutrition.goal)} · poids : ${escapeHtml(String(shared.nutrition.weightKg || "--"))} kg</span>
+    </div>
   `;
 }
 
-function renderNutritionDayPlan(shared) {
-  const { nutrition } = shared;
-  const totals = nutrition.totals;
-  const meals = nutrition.dayPlan.meals;
-
+function renderViewSwitch() {
   return `
-    <div class="nutrition-day-plan">
-      <div class="nutrition-day-plan-head">
-        <div>
-          <strong>Plan jour</strong>
-          <span>${totals.calories} kcal • P ${totals.proteins} g • G ${totals.carbs} g • L ${totals.fats} g</span>
-        </div>
-        <span class="pill pill-success">${escapeHtml(nutrition.trainingLoad)}</span>
-      </div>
-      <div class="meal-pill-list">
-        ${meals.map((meal) => `
-          <div class="meal-pill">
-            <strong>${escapeHtml(meal.category)}</strong>
-            <span>${escapeHtml(meal.recipe.nom)}</span>
-          </div>
-        `).join("")}
-      </div>
-      <div class="helper-note calm-note">${nutrition.dayPlan.coachingNotes.map((note) => escapeHtml(note)).join(" • ")}</div>
+    <div class="nutrition-view-switch" role="tablist" aria-label="Vues nutrition">
+      ${NUTRITION_VIEWS.map(([value, label]) => `
+        <button
+          class="nutrition-view-btn ${state.nutritionView === value ? "active" : ""}"
+          type="button"
+          data-action="set-nutrition-view"
+          data-view="${value}"
+        >
+          ${escapeHtml(label)}
+        </button>
+      `).join("")}
     </div>
   `;
 }
@@ -56,23 +88,23 @@ function renderFilterSheet() {
       <div class="sheet-head">
         <div>
           <div class="eyebrow">Filtres nutrition</div>
-          <h3>Affiner les recettes</h3>
+          <h3>Affiner le feed recettes</h3>
         </div>
         <button class="ghost-link" data-action="close-sheet" data-sheet="nutrition">Fermer</button>
       </div>
 
       <div class="sheet-grid sheet-grid-stack">
         <div class="field-stack">
-          <label class="field-label" for="nutritionCategory">Catégorie</label>
+          <label class="field-label" for="nutritionCategory">Moment</label>
           <div class="field-shell surface-form">
             <select id="nutritionCategory">
               ${[
-                ["all", "Toutes"],
+                ["all", "Tous"],
                 ["petit-dej", "Petit-déj"],
                 ["dejeuner", "Déjeuner"],
                 ["collation", "Collation"],
                 ["diner", "Dîner"],
-                ["rapide", "Rapide <15 min"]
+                ["rapide", "15 min max"]
               ].map(([value, label]) => `<option value="${value}" ${state.nutritionFilter.category === value ? "selected" : ""}>${label}</option>`).join("")}
             </select>
           </div>
@@ -85,7 +117,8 @@ function renderFilterSheet() {
                 ["all", "Tous"],
                 ["seche", "Sèche"],
                 ["masse", "Masse"],
-                ["maintenance", "Maintenance"]
+                ["maintenance", "Maintenance"],
+                ["muscle", "Muscle"]
               ].map(([value, label]) => `<option value="${value}" ${state.nutritionFilter.goal === value ? "selected" : ""}>${label}</option>`).join("")}
             </select>
           </div>
@@ -102,62 +135,301 @@ function renderFilterSheet() {
       </div>
 
       <div class="actions-row two">
-        <button class="btn btn-main" data-action="close-sheet" data-sheet="nutrition">Appliquer</button>
+        <button class="btn btn-main" data-action="close-sheet" data-sheet="nutrition">Valider</button>
         <button class="btn btn-outline" data-action="reset-nutrition-filters">Réinitialiser</button>
       </div>
     </div>
   `;
 }
 
+function renderNutritionHeader(shared, recipes) {
+  return `
+    <div class="nutrition-premium-shell">
+      <div class="nutrition-header-minimal">
+        <div class="nutrition-header-copy">
+          <div class="eyebrow">Nutrition</div>
+          <h2>Nutrition</h2>
+        </div>
+        <span class="pill pill-soft">${recipes.length} recettes</span>
+      </div>
+
+      <div class="nutrition-topbar">
+        <div class="command-shell nutrition-command-shell premium-search-shell">
+          <span class="command-icon">${icon("search", "", 16)}</span>
+          <input id="nutritionSearch" class="command-input" type="text" placeholder="Pancakes, bowl, smoothie, pasta..." value="${escapeHtml(state.nutritionFilter.search)}" />
+          <button class="command-clear ${state.nutritionFilter.search ? "visible" : ""}" data-action="clear-nutrition-search">Effacer</button>
+        </div>
+        <button class="control-chip nutrition-filter-trigger" data-action="open-sheet" data-sheet="nutrition">${icon("filter", "", 14)} Filtres</button>
+      </div>
+
+      ${renderViewSwitch()}
+      ${renderNutritionSummary(shared)}
+    </div>
+  `;
+}
+
+function renderNutritionPlanner(shared) {
+  return `
+    <article class="nutrition-section-card nutrition-plan-builder">
+      <div class="nutrition-section-head">
+        <div>
+          <span class="eyebrow">Plan du jour</span>
+          <h3>Ajuster le cadre</h3>
+        </div>
+        <span class="pill">${escapeHtml(getLoadLabel(shared.nutrition.trainingLoad))}</span>
+      </div>
+
+      <div class="settings-grid compact-grid nutrition-builder-grid">
+        <div class="field-stack">
+          <label class="field-label" for="nutriGoal">Objectif</label>
+          <div class="field-shell surface-form">
+            <select id="nutriGoal">
+              ${["muscle", "masse", "maintenance", "seche"].map((goal) => `<option value="${goal}" ${shared.nutrition.goal === goal ? "selected" : ""}>${escapeHtml(goal)}</option>`).join("")}
+            </select>
+          </div>
+        </div>
+        <div class="field-stack">
+          <label class="field-label" for="nutriWeight">Poids</label>
+          <div class="field-shell surface-form">
+            <input id="nutriWeight" type="number" min="35" max="180" value="${escapeHtml(shared.nutrition.weightKg)}" />
+          </div>
+        </div>
+        <div class="field-stack">
+          <label class="field-label" for="nutriActivity">Activité</label>
+          <div class="field-shell surface-form">
+            <select id="nutriActivity">
+              ${[
+                ["low", "Basse"],
+                ["medium", "Moyenne"],
+                ["high", "Haute"]
+              ].map(([value, label]) => `<option value="${value}" ${shared.nutrition.activity === value ? "selected" : ""}>${label}</option>`).join("")}
+            </select>
+          </div>
+        </div>
+        <div class="field-stack">
+          <label class="field-label">Action</label>
+          <button class="btn btn-main nutrition-validate-btn" data-action="apply-nutrition-plan">${icon("search", "", 14)} Valider le plan</button>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function renderNutritionTimeline(shared) {
+  const meals = [
+    ...(shared.nutrition.dayPlan.meals || []),
+    ...((shared.nutrition.dayPlan.extraMeals || []).map((recipe, index) => ({
+      category: `bonus-${index + 1}`,
+      recipe,
+      extra: true
+    })))
+  ];
+
+  return `
+    <article class="nutrition-section-card nutrition-timeline-card">
+      <div class="nutrition-section-head">
+        <div>
+          <span class="eyebrow">Aujourd'hui</span>
+          <h3>Plan minimal</h3>
+        </div>
+        <button class="ghost-link" data-action="set-nutrition-view" data-view="recipes">Voir les recettes</button>
+      </div>
+
+      <div class="nutrition-timeline">
+        ${meals.map((meal) => `
+          <button
+            class="nutrition-timeline-item"
+            type="button"
+            data-action="open-recipe-detail"
+            data-id="${escapeHtml(meal.recipe.id)}"
+          >
+            <span class="nutrition-timeline-dot"></span>
+            <div class="nutrition-timeline-copy">
+              <strong>${escapeHtml(meal.extra ? "Bonus" : getCategoryLabel(meal.category))} — ${escapeHtml(meal.recipe.nom)}</strong>
+              <span>${meal.recipe.temps} min · ${meal.recipe.prot} g prot${meal.extra ? " · ajouté au plan" : ""}</span>
+            </div>
+            <span class="nutrition-timeline-arrow">${icon("chevron", "", 14)}</span>
+          </button>
+        `).join("")}
+      </div>
+
+      <div class="helper-note calm-note">${shared.nutrition.dayPlan.coachingNotes.map((note) => escapeHtml(note)).join(" • ")}</div>
+    </article>
+  `;
+}
+
 function renderRecipeCard(recipe) {
   return `
-    <article class="recipe-compact-card module-nutrition">
-      <div class="exercise-head">
-        <div>
-          <div class="exercise-title">${escapeHtml(recipe.nom)}</div>
-          <div class="exercise-meta">
-            <span class="pill">${escapeHtml(recipe.categorie)}</span>
-            <span class="pill">${recipe.temps} min</span>
-            <span class="pill">${escapeHtml(recipe.objectif)}</span>
+    <article class="nutrition-feed-card">
+      <img
+        class="nutrition-feed-thumb"
+        src="${escapeHtml(getYouTubeThumbnail(recipe.videoId))}"
+        alt="${escapeHtml(recipe.nom)}"
+        loading="lazy"
+        decoding="async"
+      />
+      <div class="nutrition-feed-copy">
+        <div class="nutrition-feed-head">
+          <div>
+            <h3>${escapeHtml(recipe.nom)}</h3>
+            <p>${recipe.temps} min · ${recipe.prot} g prot</p>
           </div>
+          <button class="icon-btn ${state.favorites.has(`recipe:${recipe.id}`) ? "active" : ""}" data-action="toggle-favorite" data-type="recipe" data-id="${recipe.id}">⭐</button>
         </div>
-        <button class="icon-btn ${state.favorites.has(`recipe:${recipe.id}`) ? "active" : ""}" data-action="toggle-favorite" data-type="recipe" data-id="${recipe.id}">⭐</button>
-      </div>
 
-      <div class="recipe-compact-meta">
-        <span>${renderNumberTicker(recipe.prot, { suffix: "g" })} prot</span>
-        <span>${renderNumberTicker(recipe.calories, { suffix: " kcal" })}</span>
-        <span>${escapeHtml(recipe.moment)}</span>
-      </div>
-
-      <div class="recipe-tag-row">
-        ${recipe.tags.slice(0, 3).map((tag) => `<span class="pill">${escapeHtml(tag)}</span>`).join("")}
-      </div>
-
-      <div class="video-container">${renderRecipeVideo(recipe)}</div>
-      <div class="video-links">
-        <a class="pill pill-soft" href="${getYouTubeUrl(recipe.videoId)}" target="_blank" rel="noreferrer">Ouvrir sur YouTube</a>
-        <span class="pill">${escapeHtml(recipe.difficulte)}</span>
-      </div>
-
-      <details class="compact-details">
-        <summary>Préparation détaillée</summary>
-        <div class="coach-grid recipe-detail-grid">
-          <div>
-            <strong>Ingrédients</strong><br>${recipe.ingredients.map((ingredient) => `• ${escapeHtml(ingredient)}`).join("<br>")}
-          </div>
-          <div>
-            <strong>Étapes</strong><br>${recipe.steps.map((step, index) => `${index + 1}. ${escapeHtml(step)}`).join("<br><br>")}
-          </div>
-          <div>
-            <strong>Quand la placer</strong><br>${escapeHtml(recipe.moment)}
-          </div>
-          <div>
-            <strong>Substitutions</strong><br>${recipe.substitutions.map((item) => `• ${escapeHtml(item)}`).join("<br>")}
-          </div>
+        <div class="nutrition-feed-tags">
+          ${recipe.tags.slice(0, 2).map((tag) => `<span class="pill pill-soft">${escapeHtml(tag)}</span>`).join("")}
         </div>
-      </details>
+
+        <div class="nutrition-feed-actions">
+          <span class="nutrition-feed-moment">${escapeHtml(recipe.moment)}</span>
+          <button class="ghost-link" data-action="open-recipe-detail" data-id="${recipe.id}">Voir recette</button>
+        </div>
+      </div>
     </article>
+  `;
+}
+
+function renderRecipeFeed(recipes) {
+  const visibleRecipes = recipes.slice(0, state.nutritionFeedLimit || 8);
+
+  return `
+    <article class="nutrition-section-card nutrition-feed-shell">
+      <div class="nutrition-section-head">
+        <div>
+          <span class="eyebrow">Feed recettes</span>
+          <h3>Cartes courtes, détail au clic</h3>
+        </div>
+        <span class="pill">${recipes.length} résultats</span>
+      </div>
+
+      <div class="nutrition-feed-list">
+        ${visibleRecipes.length
+          ? visibleRecipes.map(renderRecipeCard).join("")
+          : buildEmptyState("Aucune recette trouvée", "Élargis les filtres ou change d'objectif pour relancer le feed.", "Réinitialiser", "reset-nutrition-filters")}
+      </div>
+
+      ${recipes.length > visibleRecipes.length ? `
+        <div class="nutrition-feed-more">
+          <button class="btn btn-outline" data-action="load-more-nutrition-recipes">Charger plus</button>
+        </div>
+      ` : ""}
+    </article>
+  `;
+}
+
+function renderCoursesView(shared) {
+  const groceryItems = buildNutritionGroceryList(shared.nutrition.dayPlan);
+
+  return `
+    <article class="nutrition-section-card nutrition-courses-card">
+      <div class="nutrition-section-head">
+        <div>
+          <span class="eyebrow">Courses</span>
+          <h3>Liste issue du plan du jour</h3>
+        </div>
+        <span class="pill">${groceryItems.length} items</span>
+      </div>
+
+      <div class="nutrition-courses-list">
+        ${groceryItems.length
+          ? groceryItems.map((item) => `
+            <label class="nutrition-course-item">
+              <input type="checkbox" />
+              <span>${escapeHtml(item.ingredient)}</span>
+              <small>${escapeHtml(item.recipeName)}</small>
+            </label>
+          `).join("")
+          : buildEmptyState("Aucune course générée", "Valide d'abord un plan du jour pour créer ta liste.", "", "")}
+      </div>
+    </article>
+  `;
+}
+
+function renderRecipeVideo(recipe) {
+  if (!recipe.videoId) {
+    return `<div class="video-missing">Vidéo recette non renseignée.</div>`;
+  }
+  if (state.nutritionVideoRecipeId !== recipe.id) {
+    return `
+      <button class="nutrition-video-preview" type="button" data-action="open-nutrition-video" data-id="${recipe.id}">
+        <img src="${escapeHtml(getYouTubeThumbnail(recipe.videoId))}" alt="${escapeHtml(recipe.nom)}" loading="lazy" decoding="async" />
+        <span>${icon("spark", "", 14)} Voir la vidéo</span>
+      </button>
+    `;
+  }
+  if (hasValidVideoId(recipe.videoId)) {
+    return `<lite-youtube videoid="${escapeHtml(recipe.videoId)}" title="${escapeHtml(recipe.nom)}" playlabel="Lire la vidéo ${escapeHtml(recipe.nom)}" params="rel=0&modestbranding=2"></lite-youtube>`;
+  }
+  return `
+    <a class="video-fallback" href="${getYouTubeUrl(recipe.videoId)}" target="_blank" rel="noreferrer">
+      <img src="${escapeHtml(getYouTubeThumbnail(recipe.videoId))}" alt="${escapeHtml(recipe.nom)}" />
+    </a>
+  `;
+}
+
+function renderRecipeDetailSheet() {
+  const recipeId = state.nutritionDetailRecipeId;
+  if (!recipeId) return "";
+
+  const recipe = searchRecipes({ query: "" }).find((item) => item.id === recipeId);
+  if (!recipe) return "";
+
+  const tips = buildRecipeTips(recipe);
+
+  return `
+    <div class="sheet-backdrop" data-action="close-recipe-detail"></div>
+    <div class="bottom-sheet nutrition-detail-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-head">
+        <div>
+          <div class="eyebrow">${escapeHtml(getCategoryLabel(recipe.categorie))}</div>
+          <h3>${escapeHtml(recipe.nom)}</h3>
+          <p class="muted">${recipe.temps} min · ${recipe.prot} g prot · ${recipe.calories} kcal</p>
+        </div>
+        <button class="ghost-link" data-action="close-recipe-detail">Fermer</button>
+      </div>
+
+      <img class="nutrition-detail-hero" src="${escapeHtml(getYouTubeThumbnail(recipe.videoId))}" alt="${escapeHtml(recipe.nom)}" loading="lazy" decoding="async" />
+
+      <div class="exercise-meta">
+        <span class="pill">${recipe.temps} min</span>
+        <span class="pill">${recipe.prot} g protéines</span>
+        <span class="pill">${recipe.calories} kcal</span>
+        <span class="pill">${escapeHtml(recipe.objectif)}</span>
+      </div>
+
+      <div class="nutrition-detail-video">
+        ${renderRecipeVideo(recipe)}
+      </div>
+
+      <div class="nutrition-detail-grid">
+        <div>
+          <strong>Ingrédients</strong><br>
+          ${(recipe.ingredients || []).map((ingredient) => `• ${escapeHtml(ingredient)}`).join("<br>")}
+        </div>
+        <div>
+          <strong>Étapes</strong><br>
+          ${(recipe.steps || []).map((step, index) => `${index + 1}. ${escapeHtml(step)}`).join("<br><br>")}
+        </div>
+        <div>
+          <strong>Macros</strong><br>
+          ${recipe.calories} kcal<br>
+          ${recipe.prot} g protéines<br>
+          ${recipe.carbs} g glucides<br>
+          ${recipe.fats} g lipides
+        </div>
+        <div>
+          <strong>Conseils pré / post training</strong><br>
+          ${tips.map((tip) => `• ${escapeHtml(tip)}`).join("<br>")}
+        </div>
+      </div>
+
+      <div class="actions-row two">
+        <button class="btn btn-outline" data-action="add-recipe-to-plan" data-id="${recipe.id}">Ajouter au plan</button>
+        <button class="btn btn-main" data-action="replace-plan-meal" data-id="${recipe.id}" data-category="${recipe.categorie}">Remplacer dans mon plan</button>
+      </div>
+    </div>
   `;
 }
 
@@ -171,119 +443,20 @@ export function renderNutrition(node) {
     tag: state.nutritionFilter.tag
   });
 
-  const sessionAction = state.currentPlan
-    ? { action: "start-generated-plan", label: "Lancer la séance du jour" }
-    : { action: "go-page", label: "Préparer la séance du jour", page: "ia" };
+  const shouldShowTimeline = ["plan", "recipes"].includes(state.nutritionView);
+  const shouldShowFeed = ["plan", "recipes"].includes(state.nutritionView);
 
   node.innerHTML = `
-    <div class="section nutrition-screen">
-      <div class="card module-nutrition nutrition-search-card">
-        <div class="native-block-head">
-          <div>
-            <div class="eyebrow">Nutrition</div>
-            <h2>Recherche nutrition mobile</h2>
-            <p class="muted">Recherche centrale, filtres en sheet et cartes recettes compactes reliées à la charge du jour.</p>
-          </div>
-          <span class="pill">${recipes.length} recettes</span>
-        </div>
+    <div class="section nutrition-screen nutrition-premium-screen">
+      ${renderNutritionHeader(shared, recipes)}
 
-        <div class="nutrition-toolbar">
-          <div class="command-shell nutrition-command-shell">
-            <span class="command-icon">${icon("search", "", 16)}</span>
-            <input id="nutritionSearch" class="command-input" type="text" placeholder="curry, bowl, wrap..." value="${escapeHtml(state.nutritionFilter.search)}" />
-            <button class="command-clear ${state.nutritionFilter.search ? "visible" : ""}" data-action="clear-nutrition-search">Effacer</button>
-          </div>
-          <button class="control-chip nutrition-filter-trigger" data-action="open-sheet" data-sheet="nutrition">${icon("filter", "", 14)} Filtres</button>
-        </div>
-
-        <div class="quick-action-row nutrition-actions-row">
-          <button class="quick-action" data-action="${sessionAction.action}" ${sessionAction.page ? `data-page="${sessionAction.page}"` : ""}>${icon("dumbbell", "", 14)} Séance du jour</button>
-          <button class="quick-action" data-action="run-nutrition-ai">${icon("spark", "", 14)} Plan jour</button>
-          <button class="quick-action" data-action="go-page" data-page="history">${icon("trend", "", 14)} Suivi</button>
-        </div>
-      </div>
-
-      <div class="nutrition-macro-row">
-        <div class="data-pill-card">
-          <span class="data-pill-label">${icon("bowl", "", 14)} Calories</span>
-          <strong class="data-pill-value">${renderNumberTicker(shared.nutrition.totals.calories, { suffix: "" })}</strong>
-          <small>objectif journalier</small>
-        </div>
-        <div class="data-pill-card">
-          <span class="data-pill-label">${icon("bolt", "", 14)} Protéines</span>
-          <strong class="data-pill-value">${renderNumberTicker(shared.nutrition.totals.proteins, { suffix: "g" })}</strong>
-          <small>base de récupération</small>
-        </div>
-        <div class="data-pill-card">
-          <span class="data-pill-label">${icon("target", "", 14)} Charge</span>
-          <strong class="data-pill-value">${escapeHtml(shared.nutrition.trainingLoad)}</strong>
-          <small>${shared.weeklySummary.trainingSessions} séance(s) cette semaine</small>
-        </div>
-      </div>
-
-      <div class="card module-nutrition nutrition-plan-card">
-        <div class="native-block-head">
-          <div>
-            <div class="eyebrow">Plan du jour</div>
-            <h3>Nutrition alignée à ton entraînement</h3>
-          </div>
-          <span class="pill pill-success">${escapeHtml(shared.nutrition.goal)}</span>
-        </div>
-
-        <div class="settings-grid compact-grid">
-          <div class="field-stack">
-            <label class="field-label" for="nutriGoal">Objectif</label>
-            <div class="field-shell surface-form">
-              <select id="nutriGoal">
-                ${["seche", "masse", "maintenance", "muscle"].map((goal) => `<option value="${goal}" ${shared.nutrition.goal === goal ? "selected" : ""}>${escapeHtml(goal)}</option>`).join("")}
-              </select>
-            </div>
-          </div>
-          <div class="field-stack">
-            <label class="field-label" for="nutriWeight">Poids</label>
-            <div class="field-shell surface-form">
-              <input id="nutriWeight" type="number" min="35" max="180" value="${escapeHtml(shared.nutrition.weightKg)}" />
-            </div>
-          </div>
-          <div class="field-stack full-span">
-            <label class="field-label" for="nutriActivity">Activité</label>
-            <div class="field-shell surface-form">
-              <select id="nutriActivity">
-                ${["low", "medium", "high"].map((activity) => `<option value="${activity}" ${shared.nutrition.activity === activity ? "selected" : ""}>${escapeHtml(activity)}</option>`).join("")}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        ${renderNutritionDayPlan(shared)}
-      </div>
-
-      <div class="card module-nutrition">
-        <div class="native-block-head">
-          <div>
-            <div class="eyebrow">Recettes liées</div>
-            <h3>Charge du jour</h3>
-          </div>
-          <button class="ghost-link" data-action="go-page" data-page="ia">Voir la séance</button>
-        </div>
-        <div class="recipe-carousel">
-          ${shared.relatedRecipes.slice(0, 5).map((recipe) => `
-            <button class="recipe-mini-card" data-action="open-global-result" data-type="recipe" data-id="${escapeHtml(recipe.id)}">
-              <strong>${escapeHtml(recipe.nom)}</strong>
-              <span>${recipe.calories} kcal • ${recipe.prot} g prot</span>
-              <small>${escapeHtml(recipe.tags.slice(0, 2).join(" • "))}</small>
-            </button>
-          `).join("")}
-        </div>
-      </div>
-
-      <div class="list recipe-stack">
-        ${recipes.length
-          ? recipes.map(renderRecipeCard).join("")
-          : buildEmptyState("Aucune recette trouvée", "Élargis les filtres ou change d’objectif pour voir plus d’idées.", "Réinitialiser", "reset-nutrition-filters")}
-      </div>
+      ${state.nutritionView === "courses" ? renderCoursesView(shared) : ""}
+      ${state.nutritionView !== "courses" ? renderNutritionPlanner(shared) : ""}
+      ${shouldShowTimeline ? renderNutritionTimeline(shared) : ""}
+      ${shouldShowFeed ? renderRecipeFeed(recipes) : ""}
 
       ${renderFilterSheet()}
+      ${renderRecipeDetailSheet()}
     </div>
   `;
 }

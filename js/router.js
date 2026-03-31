@@ -10,6 +10,7 @@ import { renderProgress } from "./render/progress.js";
 import { renderStats } from "./render/stats.js";
 import { renderFavoris } from "./render/favoris.js";
 import { renderNoushiHome, renderNoushiSession, renderNoushiExos } from "./render/noushi.js";
+import { renderRunnerCoach, renderRunnerHome, renderRunnerPerformance, renderRunnerSessions } from "./render/runner.js";
 import { renderHelp } from "./render/help.js";
 import { renderRelax } from "./render/relax.js";
 import { renderSettings } from "./render/settings.js";
@@ -19,7 +20,8 @@ import { renderOnboarding } from "./render/onboarding.js";
 import { hydrateUI } from "./ui.js";
 
 const ROUTE_ALIASES = {
-  noushi: "noushi-home"
+  noushi: "noushi-home",
+  runner: "runner-home"
 };
 
 const renderers = {
@@ -37,6 +39,10 @@ const renderers = {
   "noushi-home": renderNoushiHome,
   "noushi-session": renderNoushiSession,
   "noushi-exos": renderNoushiExos,
+  "runner-home": renderRunnerHome,
+  "runner-sessions": renderRunnerSessions,
+  "runner-performance": renderRunnerPerformance,
+  "runner-coach": renderRunnerCoach,
   help: renderHelp,
   relax: renderRelax,
   settings: renderSettings,
@@ -58,6 +64,10 @@ const PAGE_LABELS = {
   "noushi-home": "NOUSHI accueil",
   "noushi-session": "NOUSHI séances",
   "noushi-exos": "NOUSHI exos",
+  "runner-home": "Runner accueil",
+  "runner-sessions": "Runner séances",
+  "runner-performance": "Runner performance",
+  "runner-coach": "Runner coach",
   help: "Je sais pas comment",
   relax: "Recovery",
   settings: "Profil",
@@ -72,8 +82,14 @@ function isNoushiPage(page) {
   return String(page || "").startsWith("noushi-");
 }
 
+function isRunnerPage(page) {
+  return String(page || "").startsWith("runner-");
+}
+
 function getFallbackPage(page) {
-  return isNoushiPage(page) ? "noushi-home" : "home";
+  if (isNoushiPage(page)) return "noushi-home";
+  if (isRunnerPage(page)) return "runner-home";
+  return "home";
 }
 
 function getPageNode(page) {
@@ -82,6 +98,7 @@ function getPageNode(page) {
 
 function getTopNavTarget(page) {
   if (isNoushiPage(page)) return "noushi-home";
+  if (isRunnerPage(page)) return "runner-home";
   return page;
 }
 
@@ -120,7 +137,11 @@ function syncQuickNav(page) {
   if (!quickNav) return;
   const hidden = page === "auth" || page === "admin" || state.profile?.role === "admin";
   quickNav.classList.toggle("hidden", hidden);
-  quickNav.dataset.group = isNoushiPage(page) ? "noushi" : "main";
+  quickNav.dataset.group = isNoushiPage(page)
+    ? "noushi"
+    : isRunnerPage(page)
+      ? "runner"
+      : "main";
 }
 
 function syncShell(page) {
@@ -213,7 +234,11 @@ export function goToPage(page, options = {}) {
   state.navExpanded = false;
   state.page = nextPage;
   if (nextPage !== "ia") state.coachSheetOpen = false;
-  if (nextPage !== "nutrition") state.nutritionSheetOpen = false;
+  if (nextPage !== "nutrition") {
+    state.nutritionSheetOpen = false;
+    state.nutritionDetailRecipeId = "";
+    state.nutritionVideoRecipeId = "";
+  }
   if (nextPage === "settings" && !state.settingsTab) {
     state.settingsTab = "identity";
   }

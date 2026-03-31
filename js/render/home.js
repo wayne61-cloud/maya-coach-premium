@@ -73,6 +73,19 @@ function renderSearchResults(query, results, shared) {
     `);
   }
 
+  if (["runner", "course", "running", "semi", "marathon"].some((word) => normalized.includes(word))) {
+    utilityRows.push(`
+      <button class="command-row" data-action="go-page" data-page="runner-home">
+        <span class="command-row-icon">${icon("trend", "", 14)}</span>
+        <span class="command-row-copy">
+          <strong>Ouvrir Runner Mode</strong>
+          <span>${shared.stats.weekSessions} séances suivies • dashboard running dédié</span>
+        </span>
+        <span class="command-row-arrow">${icon("chevron", "", 14)}</span>
+      </button>
+    `);
+  }
+
   const exerciseRows = results.exercises.slice(0, 4).map((exercise) => `
     <button class="command-row" data-action="open-global-result" data-type="exo" data-id="${escapeHtml(exercise.id)}">
       <span class="command-row-icon">${icon("dumbbell", "", 14)}</span>
@@ -200,6 +213,7 @@ export function renderHome(node) {
           <button class="quick-action" data-action="go-page" data-page="exos">${icon("dumbbell", "", 14)} Exercices</button>
           <button class="quick-action" data-action="go-page" data-page="history">${icon("trend", "", 14)} Suivi</button>
           <button class="quick-action" data-action="go-page" data-page="nutrition">${icon("bowl", "", 14)} Nutrition</button>
+          <button class="quick-action" data-action="go-page" data-page="runner-home">${icon("trend", "", 14)} Runner</button>
           <button class="quick-action" data-action="go-page" data-page="progress">${icon("camera", "", 14)} Progression visuelle</button>
         </div>
 

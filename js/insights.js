@@ -137,7 +137,9 @@ export function getNutritionSnapshot(profile = state.profile || defaultProfile) 
     goal,
     weightKg,
     activity,
-    trainingLoad
+    trainingLoad,
+    mealOverrides: state.nutritionProfile?.mealOverrides || {},
+    extraMealIds: state.nutritionProfile?.extraMealIds || []
   });
 
   return {

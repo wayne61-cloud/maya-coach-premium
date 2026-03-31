@@ -1,7 +1,8 @@
-import { EXO_BY_ID, getNoushiBeastSpotlights, getNoushiChallengesByPlace } from "../catalog.js";
+import { EXO_BY_ID, getNoushiChallengesByPlace } from "../catalog.js";
+import { NOUSHI_ELITE_LIBRARY, NOUSHI_IMPOSSIBLE_TOP, NOUSHI_REALITY_CHECK } from "../../data/noushi-elite.js";
 import { ensureLiteYouTubeEmbed } from "../lite-youtube.js";
 import { state } from "../state.js";
-import { buildEmptyState, escapeHtml, getYouTubeThumbnail, getYouTubeUrl } from "../utils.js";
+import { buildEmptyState, escapeHtml } from "../utils.js";
 import { icon } from "../ui.js";
 
 function getPlaceLabel(place) {
@@ -12,18 +13,12 @@ function getPlaceLabel(place) {
   }[place] || "Mixte";
 }
 
-function renderExerciseVideo(exercise) {
-  if (!exercise?.videoId) {
-    return `<div class="video-missing">Vidéo non renseignée pour cet exercice.</div>`;
+function renderExerciseVideo(item) {
+  if (!item?.videoId || !/^[A-Za-z0-9_-]{11}$/.test(String(item.videoId || ""))) {
+    return `<div class="video-missing">Vidéo YouTube validée non disponible pour ce mouvement.</div>`;
   }
-  if (/^[A-Za-z0-9_-]{11}$/.test(String(exercise.videoId || ""))) {
-    return `<lite-youtube videoid="${escapeHtml(exercise.videoId)}" title="${escapeHtml(exercise.nom)}" playlabel="Lire la vidéo ${escapeHtml(exercise.nom)}" params="rel=0&modestbranding=2"></lite-youtube>`;
-  }
-  return `
-    <a class="video-fallback" href="${getYouTubeUrl(exercise.videoId)}" target="_blank" rel="noreferrer">
-      <img src="${getYouTubeThumbnail(exercise.videoId)}" alt="${escapeHtml(exercise.nom)}" />
-    </a>
-  `;
+
+  return `<lite-youtube videoid="${escapeHtml(item.videoId)}" title="${escapeHtml(item.title)}" playlabel="Lire la vidéo ${escapeHtml(item.title)}" params="rel=0&modestbranding=2"></lite-youtube>`;
 }
 
 function getCompletedChallenges() {
@@ -55,6 +50,23 @@ function renderPlaceToggle(activePlace) {
       `).join("")}
     </div>
   `;
+}
+
+function getVisibleEliteGroups(place = "mixte") {
+  if (place === "maison") {
+    return NOUSHI_ELITE_LIBRARY.maison.map((group) => ({ ...group, place: "maison" }));
+  }
+  if (place === "salle") {
+    return NOUSHI_ELITE_LIBRARY.salle.map((group) => ({ ...group, place: "salle" }));
+  }
+  return [
+    ...NOUSHI_ELITE_LIBRARY.salle.map((group) => ({ ...group, place: "salle" })),
+    ...NOUSHI_ELITE_LIBRARY.maison.map((group) => ({ ...group, place: "maison" }))
+  ];
+}
+
+function getVisibleEliteCount(place = "mixte") {
+  return getVisibleEliteGroups(place).reduce((total, group) => total + group.items.length, 0);
 }
 
 function renderChallengeCard(challenge, completeCount) {
@@ -94,51 +106,56 @@ function renderChallengeCard(challenge, completeCount) {
   `;
 }
 
-function renderSpotlightCard(spotlight) {
-  const exercise = EXO_BY_ID.get(spotlight.exerciseId);
-  if (!exercise) return "";
-
+function renderEliteGroup(group) {
   return `
-    <article class="exercise-card noushi-beast-card">
-      <div class="exercise-head">
+    <article class="noushi-elite-group">
+      <div class="noushi-elite-head">
         <div>
-          <div class="exercise-title">${escapeHtml(exercise.nom)}</div>
-          <div class="exercise-meta">
-            <span class="pill">${escapeHtml(spotlight.surnom)}</span>
-            <span class="pill">${escapeHtml(getPlaceLabel(exercise.pole))}</span>
-            <span class="pill">${escapeHtml(exercise.muscle)}</span>
-            <span class="pill">niveau ${exercise.niveau}/3</span>
-          </div>
+          <div class="eyebrow">${escapeHtml(getPlaceLabel(group.place))} • ${escapeHtml(group.title)}</div>
+          <h3>${escapeHtml(group.title)}</h3>
+          <p>${escapeHtml(group.mood)}</p>
         </div>
-        <button class="icon-btn ${state.favorites.has(`exo:${exercise.id}`) ? "active" : ""}" data-action="toggle-favorite" data-type="exo" data-id="${exercise.id}">⭐</button>
+        <span class="pill">${group.items.length} mouvements</span>
       </div>
 
-      <div class="video-container">${renderExerciseVideo(exercise)}</div>
-
-      <div class="noushi-prescription-grid">
-        <div><strong>Description</strong><br>${escapeHtml(spotlight.description)}</div>
-        <div><strong>Prep</strong><br>${escapeHtml(spotlight.prep)}</div>
-        <div><strong>Reps / temps</strong><br>${escapeHtml(spotlight.reps)}</div>
-        <div><strong>Repos</strong><br>${escapeHtml(String(spotlight.restSec))} sec</div>
+      <div class="noushi-elite-gallery">
+        ${group.illustrations.map((url) => `<img src="${escapeHtml(url)}" alt="${escapeHtml(group.title)} ${escapeHtml(getPlaceLabel(group.place))}" loading="lazy" decoding="async" />`).join("")}
       </div>
 
-      <details>
-        <summary>Technique détaillée</summary>
-        <div class="coach-grid">
-          <div><strong>Setup:</strong> ${escapeHtml(exercise.setup)}</div>
-          <div><strong>Exécution:</strong><br>${exercise.execution.map((step, index) => `${index + 1}. ${escapeHtml(step)}`).join("<br>")}</div>
-          <div><strong>Respiration:</strong> ${escapeHtml(exercise.respiration)}</div>
-          <div><strong>Tempo:</strong> ${escapeHtml(exercise.tempo)}</div>
-          <div><strong>Checkpoints:</strong><br>${exercise.checkpoints.map((item) => `• ${escapeHtml(item)}`).join("<br>")}</div>
-          <div><strong>Erreurs fréquentes:</strong><br>${exercise.erreursFrequentes.map((item) => `• ${escapeHtml(item)}`).join("<br>")}</div>
-          <div><strong>Avertissement:</strong> ${escapeHtml(spotlight.warning)}</div>
+      <div class="noushi-elite-list">
+        ${group.items.map((item) => `
+          <details class="noushi-elite-item">
+            <summary>
+              <span>
+                <strong>${escapeHtml(item.title)}</strong>
+                <small>${escapeHtml(item.note)}</small>
+              </span>
+              <span class="pill pill-soft">élite mondiale</span>
+            </summary>
+            <div class="noushi-elite-content">
+              <p>${escapeHtml(item.note)}</p>
+              <div class="video-container">${renderExerciseVideo(item)}</div>
+            </div>
+          </details>
+        `).join("")}
+      </div>
+    </article>
+  `;
+}
+
+function renderImpossibleBlock() {
+  return `
+    <article class="noushi-impossible-card">
+      <div class="native-block-head">
+        <div>
+          <div class="eyebrow">Top 5 presque impossibles</div>
+          <h3>Le délire élite mondiale</h3>
         </div>
-      </details>
-
-      <div class="actions-row two">
-        <button class="btn btn-main" data-action="add-exo-session" data-id="${exercise.id}">Ajouter à Ma séance</button>
-        <button class="btn btn-outline" data-action="ai-around-exo" data-id="${exercise.id}">Séance IA autour</button>
       </div>
+      <ol class="noushi-top-five">
+        ${NOUSHI_IMPOSSIBLE_TOP.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+      </ol>
+      <div class="helper-note alert-note">${NOUSHI_REALITY_CHECK.map((item) => escapeHtml(item)).join(" • ")}</div>
     </article>
   `;
 }
@@ -147,16 +164,14 @@ export function renderNoushiHome(node) {
   ensureLiteYouTubeEmbed().catch(() => {});
   const completedChallenges = getCompletedChallenges();
   const challenges = getNoushiChallengesByPlace(state.noushiFilter.place);
-  const spotlights = getNoushiBeastSpotlights(state.noushiFilter.place);
-  const spotlight = spotlights[0];
-  const spotlightExercise = spotlight ? EXO_BY_ID.get(spotlight.exerciseId) : null;
+  const eliteGroups = getVisibleEliteGroups(state.noushiFilter.place);
 
   node.innerHTML = `
     <div class="section noushi-screen">
       <div class="card noushi-hero">
         <div class="eyebrow">NOUSHI APP</div>
-        <h2>Le mode qui ne te laisse aucun prétexte</h2>
-        <p>NOUSHI garde maintenant un vrai mode <strong>${escapeHtml(getPlaceLabel(state.noushiFilter.place))}</strong> pour basculer vite entre maison et salle sans quitter l’univers brutal.</p>
+        <h2>Le mode brutal prend enfin du volume</h2>
+        <p>Tu as maintenant un vrai split <strong>${escapeHtml(getPlaceLabel(state.noushiFilter.place))}</strong> avec des groupes musculaires, des illustrations ciblées et des mouvements de niveau élite mondiale.</p>
 
         ${renderPlaceToggle(state.noushiFilter.place)}
 
@@ -171,41 +186,36 @@ export function renderNoushiHome(node) {
           </div>
           <div class="summary-chip summary-chip-green">
             <span class="summary-label">Bestiaire</span>
-            <strong>${spotlights.length} exos</strong>
+            <strong>${getVisibleEliteCount(state.noushiFilter.place)} exos</strong>
           </div>
         </div>
 
         <div class="actions-row two">
           <button class="btn btn-bad" data-action="go-page" data-page="noushi-session">Ouvrir les séances NOUSHI</button>
-          <button class="btn btn-outline" data-action="go-page" data-page="noushi-exos">Ouvrir les exercices NOUSHI</button>
+          <button class="btn btn-outline" data-action="go-page" data-page="noushi-exos">Ouvrir le bestiaire élite</button>
         </div>
       </div>
 
       <div class="noushi-home-grid">
-        <div class="card noushi-home-panel">
-          <div class="native-block-head">
-            <div>
-              <div class="eyebrow">Séances • ${escapeHtml(getPlaceLabel(state.noushiFilter.place))}</div>
-              <h3>${escapeHtml(challenges[0]?.nom || "Défis NOUSHI")}</h3>
+        ${eliteGroups.slice(0, 2).map((group) => `
+          <div class="card noushi-home-panel">
+            <div class="native-block-head">
+              <div>
+                <div class="eyebrow">${escapeHtml(getPlaceLabel(group.place))}</div>
+                <h3>${escapeHtml(group.title)}</h3>
+              </div>
+              <span class="pill">${group.items.length} exos</span>
             </div>
-            <span class="pill">${challenges.length} défis</span>
-          </div>
-          <p class="muted">${escapeHtml(challenges[0]?.promesse || "Défis denses, techniques et volontairement hostiles.")}</p>
-          <button class="btn btn-main" data-action="go-page" data-page="noushi-session">Voir tous les défis</button>
-        </div>
-
-        <div class="card noushi-home-panel">
-          <div class="native-block-head">
-            <div>
-              <div class="eyebrow">Exercices • ${escapeHtml(getPlaceLabel(state.noushiFilter.place))}</div>
-              <h3>${escapeHtml(spotlightExercise?.nom || "Bestiaire")}</h3>
+            <p class="muted">${escapeHtml(group.mood)}</p>
+            <div class="exercise-meta">
+              ${group.items.slice(0, 2).map((item) => `<span class="pill pill-soft">${escapeHtml(item.title)}</span>`).join("")}
             </div>
-            <span class="pill">${spotlight ? escapeHtml(spotlight.surnom) : "monstre"}</span>
+            <button class="btn btn-outline" data-action="go-page" data-page="noushi-exos">Voir le détail</button>
           </div>
-          <p class="muted">${escapeHtml(spotlight?.description || "Les mouvements les plus difficiles de l’écosystème NOUSHI.")}</p>
-          <button class="btn btn-outline" data-action="go-page" data-page="noushi-exos">Voir le bestiaire</button>
-        </div>
+        `).join("")}
       </div>
+
+      ${renderImpossibleBlock()}
     </div>
   `;
 }
@@ -220,7 +230,7 @@ export function renderNoushiSession(node) {
       <div class="card noushi-hero compact">
         <div class="eyebrow">NOUSHI • Séances</div>
         <h2>Défis hardcore ${escapeHtml(getPlaceLabel(state.noushiFilter.place))}</h2>
-        <p>Choisis un défi par zone et par lieu. Le badge ne tombe que si la séance est tenue sans abandon.</p>
+        <p>Le mode séance reste compact, mais il est maintenant soutenu par un vrai bestiaire maison / salle juste derrière.</p>
         ${renderPlaceToggle(state.noushiFilter.place)}
       </div>
 
@@ -239,26 +249,24 @@ export function renderNoushiSession(node) {
 
 export function renderNoushiExos(node) {
   ensureLiteYouTubeEmbed().catch(() => {});
-  const spotlights = getNoushiBeastSpotlights(state.noushiFilter.place);
+  const eliteGroups = getVisibleEliteGroups(state.noushiFilter.place);
 
   node.innerHTML = `
     <div class="section noushi-screen">
       <div class="card noushi-hero compact">
         <div class="eyebrow">NOUSHI • Exercices</div>
         <h2>Bestiaire ${escapeHtml(getPlaceLabel(state.noushiFilter.place))}</h2>
-        <p>Même logique que le pôle exercices Maya Coach, mais concentrée ici sur les mouvements les plus durs du mode ${escapeHtml(getPlaceLabel(state.noushiFilter.place))}.</p>
+        <p>Version enrichie: salle par groupe musculaire, maison par groupe musculaire, exercices élite mondiale, vidéos et reality check intégré.</p>
         ${renderPlaceToggle(state.noushiFilter.place)}
       </div>
 
-      <div class="list">
-        ${spotlights.length
-          ? spotlights.map(renderSpotlightCard).join("")
-          : buildEmptyState("Aucun monstre trouvé", "Passe en mode mixte pour voir l’ensemble du bestiaire NOUSHI.", "", "")}
+      <div class="noushi-elite-stack">
+        ${eliteGroups.length
+          ? eliteGroups.map(renderEliteGroup).join("")
+          : buildEmptyState("Aucun monstre trouvé", "Passe en mode mixte pour voir l'ensemble du bestiaire NOUSHI.", "", "")}
       </div>
+
+      ${renderImpossibleBlock()}
     </div>
   `;
-}
-
-export function renderNoushi(node) {
-  renderNoushiHome(node);
 }

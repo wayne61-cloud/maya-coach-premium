@@ -4,7 +4,7 @@ import { getAppDiagnostics } from "./diagnostics.js";
 import { generateFlowiseSessionId, syncFlowiseWidget, updateFlowiseConfig } from "./flowise.js";
 import { ensureLiteYouTubeEmbed } from "./lite-youtube.js";
 import { notifyTopRecommendation, refreshNotificationPermission, registerServiceWorker, requestNotificationPermission, sendCoachNotification, startNotificationPulse } from "./notifications.js";
-import { buildDailyMealPlan, inferTrainingLoad, saveNutritionPlan } from "./nutrition.js";
+import { addRecipeToNutritionPlan, buildDailyMealPlan, inferTrainingLoad, replaceRecipeInNutritionPlan, saveNutritionPlan } from "./nutrition.js";
 import { goBack, goToPage, initRouter, refreshCurrentPage, refreshShell } from "./router.js";
 import { computeCoachRecommendations } from "./recommendations.js";
 import {
@@ -36,6 +36,41 @@ function showToast(message) {
   toast.classList.add("show");
   clearTimeout(showToast.timer);
   showToast.timer = setTimeout(() => toast.classList.remove("show"), 1800);
+}
+
+async function refreshAdminLiveNow({ silent = true } = {}) {
+  if (refreshAdminLiveNow.pending || state.profile?.role !== "admin" || state.page !== "admin" || !isCloudSessionReady()) {
+    return;
+  }
+
+  refreshAdminLiveNow.pending = true;
+  try {
+    await refreshAdminDashboard();
+    refreshCurrentPage();
+  } catch (error) {
+    if (!silent) {
+      showToast(readErrorMessage(error, "Erreur admin"));
+    }
+  } finally {
+    refreshAdminLiveNow.pending = false;
+  }
+}
+
+function syncAdminLiveRefresh() {
+  const shouldRun = state.profile?.role === "admin" && state.page === "admin" && isCloudSessionReady();
+  if (!shouldRun) {
+    if (syncAdminLiveRefresh.timer) {
+      clearInterval(syncAdminLiveRefresh.timer);
+      syncAdminLiveRefresh.timer = 0;
+    }
+    return;
+  }
+
+  if (!syncAdminLiveRefresh.timer) {
+    syncAdminLiveRefresh.timer = window.setInterval(() => {
+      refreshAdminLiveNow({ silent: true }).catch(() => {});
+    }, 3000);
+  }
 }
 
 function updateClock() {
@@ -249,6 +284,7 @@ async function routeAfterAuthentication() {
         error: readErrorMessage(error, "Impossible de charger le pôle de modération")
       };
     });
+    syncAdminLiveRefresh();
     refreshCurrentPage();
     return;
   }
@@ -447,6 +483,9 @@ function runNutritionAI() {
   const dayPlan = buildDailyMealPlan({ goal, weightKg, activity, trainingLoad });
   saveNutritionPlan(goal, weightKg, activity, trainingLoad, dayPlan);
   state.nutritionFilter.goal = goal;
+  state.nutritionView = "plan";
+  state.nutritionDetailRecipeId = "";
+  state.nutritionVideoRecipeId = "";
   scheduleAutoSync();
   showToast("Plan nutrition du jour généré");
   refreshCurrentPage();
@@ -466,6 +505,7 @@ async function saveProfileFromInputs() {
 
 async function navigateToPage(page, options = {}) {
   goToPage(page, options);
+  syncAdminLiveRefresh();
 
   if (page === "admin" && state.profile?.role === "admin" && isCloudSessionReady()) {
     try {
@@ -868,6 +908,45 @@ async function routeAction(action, target) {
       return;
     case "clear-nutrition-search":
       state.nutritionFilter.search = "";
+      state.nutritionFeedLimit = 8;
+      refreshCurrentPage();
+      return;
+    case "set-nutrition-view":
+      state.nutritionView = target.dataset.view || "plan";
+      if (state.nutritionView !== "recipes") {
+        state.nutritionFeedLimit = 8;
+      }
+      refreshCurrentPage();
+      return;
+    case "apply-nutrition-plan":
+      runNutritionAI();
+      return;
+    case "open-recipe-detail":
+      state.nutritionDetailRecipeId = target.dataset.id || "";
+      state.nutritionVideoRecipeId = "";
+      refreshCurrentPage();
+      return;
+    case "close-recipe-detail":
+      state.nutritionDetailRecipeId = "";
+      state.nutritionVideoRecipeId = "";
+      refreshCurrentPage();
+      return;
+    case "open-nutrition-video":
+      state.nutritionVideoRecipeId = target.dataset.id || "";
+      refreshCurrentPage();
+      return;
+    case "add-recipe-to-plan":
+      if (!addRecipeToNutritionPlan(target.dataset.id)) return;
+      showToast("Recette ajoutée au plan du jour");
+      refreshCurrentPage();
+      return;
+    case "replace-plan-meal":
+      if (!replaceRecipeInNutritionPlan(target.dataset.category, target.dataset.id)) return;
+      showToast("Repas remplacé dans le plan du jour");
+      refreshCurrentPage();
+      return;
+    case "load-more-nutrition-recipes":
+      state.nutritionFeedLimit = Math.min(48, (state.nutritionFeedLimit || 8) + 8);
       refreshCurrentPage();
       return;
     case "start-generated-plan":
@@ -1243,6 +1322,7 @@ async function routeAction(action, target) {
       return;
     case "reset-nutrition-filters":
       state.nutritionFilter = { search: "", category: "all", goal: "all", tag: "all" };
+      state.nutritionFeedLimit = 8;
       refreshCurrentPage();
       return;
     case "start-protocol": {
@@ -1361,6 +1441,7 @@ function bindEvents() {
     }
     if (target.id === "nutritionSearch") {
       state.nutritionFilter.search = target.value;
+      state.nutritionFeedLimit = 8;
       scheduleDeferredRefresh("nutrition-search");
     }
     if (target.id === "customSessionSearch") {
@@ -1523,6 +1604,9 @@ async function init() {
       if (state.currentUser && state.profile?.role !== "admin") {
         pullSyncSnapshot().catch(() => {});
       }
+      if (state.profile?.role === "admin" && state.page === "admin") {
+        refreshAdminLiveNow({ silent: true }).catch(() => {});
+      }
       if (state.profile?.role !== "admin") {
         syncFlowiseWidget().catch(() => {});
       }
@@ -1536,6 +1620,9 @@ async function init() {
         notifyTopRecommendation(false).catch(() => {});
         if (state.currentUser && state.profile?.role !== "admin") {
           pullSyncSnapshot().catch(() => {});
+        }
+        if (state.profile?.role === "admin" && state.page === "admin") {
+          refreshAdminLiveNow({ silent: true }).catch(() => {});
         }
         if (state.profile?.role !== "admin") {
           syncFlowiseWidget().catch(() => {});
@@ -1555,6 +1642,7 @@ async function init() {
         error: readErrorMessage(error, "Impossible de charger le pôle de modération")
       };
     });
+    syncAdminLiveRefresh();
     refreshCurrentPage();
   }
   if (state.profile?.role !== "admin") {

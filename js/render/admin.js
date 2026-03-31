@@ -116,6 +116,7 @@ function getVisibleUsers(section = state.adminRuntime?.section || "profiles") {
 
 function renderAdminHeader() {
   const activeSection = state.adminRuntime?.section || "profiles";
+  const pendingCount = getAdminUsers().filter((user) => user.accountStatus === "pending").length;
   return `
     <div class="card admin-panel-card">
       <div class="native-block-head">
@@ -170,7 +171,9 @@ function renderAdminHeader() {
       </div>
 
       <div class="helper-note ${state.adminRuntime?.error ? "alert-note" : "info-note"}">
-        ${escapeHtml(state.adminRuntime?.error || (state.adminRuntime?.lastFetchedAt ? `Dernière mise à jour ${formatShortDate(state.adminRuntime.lastFetchedAt)}` : "Dashboard prêt à charger"))}
+        ${escapeHtml(state.adminRuntime?.error || (pendingCount
+          ? `${pendingCount} compte(s) en attente • modération live active`
+          : (state.adminRuntime?.lastFetchedAt ? `Dernière mise à jour ${formatShortDate(state.adminRuntime.lastFetchedAt)} • modération live active` : "Dashboard prêt à charger")))}
       </div>
     </div>
   `;
@@ -185,6 +188,16 @@ function renderProfilesSection(users) {
     <div class="admin-user-list">
       ${users.map((user) => {
         const isActive = state.adminRuntime?.selectedProfileId === user.id && state.adminRuntime?.detailOpen;
+        const nextStatus = user.accountStatus === "pending"
+          ? "active"
+          : user.accountStatus === "active"
+            ? "suspended"
+            : "active";
+        const actionLabel = user.accountStatus === "pending"
+          ? "Valider"
+          : user.accountStatus === "active"
+            ? "Suspendre"
+            : "Réactiver";
         return `
           <article class="admin-user-card ${isActive ? "active" : ""}">
             <div class="admin-user-card-copy">
@@ -194,7 +207,7 @@ function renderProfilesSection(users) {
             </div>
             <div class="actions-row admin-card-actions">
               <button class="btn ${isActive ? "btn-main" : "btn-outline"}" data-action="admin-open-user" data-id="${escapeHtml(user.id)}" data-tab="notes">${isActive ? "Ouvert" : "Ouvrir le dossier"}</button>
-              <button class="btn ${user.accountStatus === "active" ? "btn-warn" : "btn-outline"}" data-action="admin-set-user-status" data-id="${escapeHtml(user.id)}" data-status="${user.accountStatus === "active" ? "suspended" : "active"}">${user.accountStatus === "active" ? "Suspendre" : "Réactiver"}</button>
+              <button class="btn ${user.accountStatus === "pending" ? "btn-main" : user.accountStatus === "active" ? "btn-warn" : "btn-outline"}" data-action="admin-set-user-status" data-id="${escapeHtml(user.id)}" data-status="${nextStatus}">${actionLabel}</button>
               <button class="btn btn-bad" data-action="admin-open-delete-account" data-id="${escapeHtml(user.id)}" data-name="${escapeHtml(user.name || user.email || "Utilisateur")}">Supprimer</button>
             </div>
           </article>
@@ -372,7 +385,7 @@ function renderSuspendedSection(users) {
             ${user.moderationReason ? `<p class="muted">${escapeHtml(user.moderationReason)}</p>` : ""}
           </div>
           <div class="actions-row admin-card-actions">
-            <button class="btn btn-main" data-action="admin-set-user-status" data-id="${escapeHtml(user.id)}" data-status="active">Retirer la suspension</button>
+            <button class="btn btn-main" data-action="admin-set-user-status" data-id="${escapeHtml(user.id)}" data-status="active">${user.accountStatus === "pending" ? "Valider le compte" : "Retirer la suspension"}</button>
             <button class="btn btn-outline" data-action="admin-open-user" data-id="${escapeHtml(user.id)}" data-tab="notes">Ouvrir le dossier</button>
             ${user.accountStatus !== "banned" ? `<button class="btn btn-bad" data-action="admin-set-user-status" data-id="${escapeHtml(user.id)}" data-status="banned">Bannir</button>` : ""}
           </div>

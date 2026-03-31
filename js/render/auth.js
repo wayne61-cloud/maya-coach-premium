@@ -32,7 +32,7 @@ export function renderAuth(node) {
         <div class="auth-card auth-form-card auth-standalone-card">
           <div class="auth-brand-lockup">
             <h1>${isSignup ? "Créer un compte" : "Connexion"}</h1>
-            <p>${isSignup ? "Crée ton accès et entre directement dans l’app." : "Entre tes identifiants pour ouvrir ton espace."}</p>
+            <p>${isSignup ? "Crée ton accès. Le compte passe ensuite en validation admin avant ouverture complète." : "Entre tes identifiants pour ouvrir ton espace."}</p>
           </div>
 
           <div class="settings-tabs auth-tabs">

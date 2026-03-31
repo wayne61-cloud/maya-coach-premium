@@ -1,7 +1,9 @@
-import { RECIPES } from "./catalog.js";
+import { RECIPES, RECIPE_BY_ID } from "./catalog.js";
 import { scheduleAutoSync } from "./sync.js";
 import { state, persistNutritionHistory, persistNutritionProfile } from "./state.js";
 import { dayKey, sum } from "./utils.js";
+
+const MEAL_CATEGORIES = ["petit-dej", "dejeuner", "collation", "diner"];
 
 export function inferTrainingLoad(planOrEntry) {
   if (!planOrEntry) return "medium";
@@ -51,20 +53,76 @@ function scoreRecipe(recipe, category, goal, trainingLoad, totals) {
   return score;
 }
 
-export function buildDailyMealPlan({ goal, weightKg, activity, trainingLoad }) {
+function sanitizeExtraMealIds(extraMealIds = []) {
+  return [...new Set(
+    (Array.isArray(extraMealIds) ? extraMealIds : [])
+      .map((recipeId) => String(recipeId || "").trim())
+      .filter((recipeId) => RECIPE_BY_ID.has(recipeId))
+  )];
+}
+
+function resolveRecipeForCategory({ category, goal, trainingLoad, totals, overrideId = "" }) {
+  const preferred = overrideId ? RECIPE_BY_ID.get(overrideId) : null;
+  if (preferred && preferred.categorie === category) {
+    return preferred;
+  }
+
+  return RECIPES
+    .filter((recipe) => recipe.categorie === category)
+    .map((recipe) => ({ recipe, score: scoreRecipe(recipe, category, goal, trainingLoad, totals) }))
+    .sort((left, right) => right.score - left.score)[0]?.recipe || RECIPES[0];
+}
+
+function buildActiveNutritionProfile() {
+  const profile = state.profile || {};
+  const goal = state.nutritionProfile?.goal || profile.goal || "maintenance";
+  const weightKg = Number(state.nutritionProfile?.weightKg || profile.weightKg || 72) || 72;
+  const activity = state.nutritionProfile?.activity || "medium";
+  const trainingLoad = state.nutritionProfile?.trainingLoad || inferTrainingLoad(state.currentPlan || state.history.find((entry) => entry.type === "training"));
+  return {
+    goal,
+    weightKg,
+    activity,
+    trainingLoad
+  };
+}
+
+function patchLatestNutritionHistory(entryPatch) {
+  if (!state.nutritionHistory.length) return;
+  state.nutritionHistory[0] = {
+    ...(state.nutritionHistory[0] || {}),
+    ...entryPatch,
+    date: state.nutritionHistory[0]?.date || new Date().toISOString()
+  };
+  persistNutritionHistory();
+}
+
+export function buildDailyMealPlan({ goal, weightKg, activity, trainingLoad, mealOverrides = {}, extraMealIds = [] }) {
   const totals = calcNutritionPlan(goal, weightKg, activity, trainingLoad);
-  const mealCategories = ["petit-dej", "dejeuner", "collation", "diner"];
-  const meals = mealCategories.map((category) => {
-      const match = RECIPES
-      .filter((recipe) => recipe.categorie === category)
-      .map((recipe) => ({ recipe, score: scoreRecipe(recipe, category, goal, trainingLoad, totals) }))
-      .sort((left, right) => right.score - left.score)[0]?.recipe;
-    return { category, recipe: match || RECIPES[0] };
-  });
+  const normalizedOverrides = Object.fromEntries(
+    Object.entries(mealOverrides || {})
+      .filter(([category]) => MEAL_CATEGORIES.includes(category))
+      .map(([category, recipeId]) => [category, String(recipeId || "").trim()])
+  );
+  const meals = MEAL_CATEGORIES.map((category) => ({
+    category,
+    recipe: resolveRecipeForCategory({
+      category,
+      goal,
+      trainingLoad,
+      totals,
+      overrideId: normalizedOverrides[category] || ""
+    }),
+    overridden: Boolean(normalizedOverrides[category])
+  }));
+  const extraMeals = sanitizeExtraMealIds(extraMealIds)
+    .map((recipeId) => RECIPE_BY_ID.get(recipeId))
+    .filter(Boolean);
 
   return {
     totals,
     meals,
+    extraMeals,
     coachingNotes: [
       trainingLoad === "high"
         ? "Charge d'entraînement élevée: priorité aux protéines hautes et aux glucides autour de la séance."
@@ -85,7 +143,9 @@ export function saveNutritionPlan(goal, weightKg, activity, trainingLoad, dailyP
     ...dailyPlan.totals,
     goal,
     weightKg,
-    activity
+    activity,
+    mealOverrides: Object.fromEntries(dailyPlan.meals.map((meal) => [meal.category, meal.recipe.id])),
+    extraMealIds: (dailyPlan.extraMeals || []).map((recipe) => recipe.id)
   };
   state.nutritionHistory.unshift({
     id: `nutrition_${Date.now()}`,
@@ -93,12 +153,100 @@ export function saveNutritionPlan(goal, weightKg, activity, trainingLoad, dailyP
     goal,
     calories: dailyPlan.totals.calories,
     trainingLoad,
-    mealIds: dailyPlan.meals.map((meal) => meal.recipe.id)
+    mealIds: dailyPlan.meals.map((meal) => meal.recipe.id),
+    extraMealIds: (dailyPlan.extraMeals || []).map((recipe) => recipe.id)
   });
   state.nutritionHistory = state.nutritionHistory.slice(0, 60);
   persistNutritionProfile();
   persistNutritionHistory();
   scheduleAutoSync();
+}
+
+export function replaceRecipeInNutritionPlan(category, recipeId) {
+  if (!MEAL_CATEGORIES.includes(category)) return null;
+  const recipe = RECIPE_BY_ID.get(recipeId);
+  if (!recipe || recipe.categorie !== category) return null;
+
+  const current = buildActiveNutritionProfile();
+  const mealOverrides = {
+    ...(state.nutritionProfile?.mealOverrides || {}),
+    [category]: recipeId
+  };
+  const nextPlan = buildDailyMealPlan({
+    ...current,
+    mealOverrides,
+    extraMealIds: state.nutritionProfile?.extraMealIds || []
+  });
+
+  state.nutritionProfile = {
+    ...state.nutritionProfile,
+    ...nextPlan.totals,
+    goal: current.goal,
+    weightKg: current.weightKg,
+    activity: current.activity,
+    trainingLoad: current.trainingLoad,
+    mealOverrides,
+    extraMealIds: sanitizeExtraMealIds(state.nutritionProfile?.extraMealIds || [])
+  };
+  persistNutritionProfile();
+  patchLatestNutritionHistory({
+    goal: current.goal,
+    calories: nextPlan.totals.calories,
+    trainingLoad: current.trainingLoad,
+    mealIds: nextPlan.meals.map((meal) => meal.recipe.id),
+    extraMealIds: state.nutritionProfile.extraMealIds
+  });
+  scheduleAutoSync();
+  return nextPlan;
+}
+
+export function addRecipeToNutritionPlan(recipeId) {
+  const recipe = RECIPE_BY_ID.get(recipeId);
+  if (!recipe) return null;
+
+  const current = buildActiveNutritionProfile();
+  const extraMealIds = sanitizeExtraMealIds([
+    ...(state.nutritionProfile?.extraMealIds || []),
+    recipeId
+  ]);
+  const nextPlan = buildDailyMealPlan({
+    ...current,
+    mealOverrides: state.nutritionProfile?.mealOverrides || {},
+    extraMealIds
+  });
+
+  state.nutritionProfile = {
+    ...state.nutritionProfile,
+    ...nextPlan.totals,
+    goal: current.goal,
+    weightKg: current.weightKg,
+    activity: current.activity,
+    trainingLoad: current.trainingLoad,
+    mealOverrides: state.nutritionProfile?.mealOverrides || {},
+    extraMealIds
+  };
+  persistNutritionProfile();
+  patchLatestNutritionHistory({
+    goal: current.goal,
+    calories: nextPlan.totals.calories,
+    trainingLoad: current.trainingLoad,
+    mealIds: nextPlan.meals.map((meal) => meal.recipe.id),
+    extraMealIds
+  });
+  scheduleAutoSync();
+  return nextPlan;
+}
+
+export function buildNutritionGroceryList(dayPlan) {
+  const recipes = [
+    ...(dayPlan?.meals || []).map((meal) => meal.recipe),
+    ...(dayPlan?.extraMeals || [])
+  ].filter(Boolean);
+
+  return recipes.flatMap((recipe) => (recipe.ingredients || []).map((ingredient) => ({
+    recipeName: recipe.nom,
+    ingredient
+  })));
 }
 
 export function getNutritionRegularity(days = 7) {

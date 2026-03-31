@@ -1,4 +1,5 @@
 import {
+  getAdminEmails,
   getManagedBackendProductConfig,
   hasCloudProductConfig,
   hasManagedBackendProductConfig,
@@ -471,9 +472,12 @@ async function applyPreviewSession(sessionRecord) {
 }
 
 function buildProfilePayload(profile, currentUser, photoPath = "", existingRow = null) {
-  const role = existingRow?.role || profile?.role || defaultProfile.role;
+  const safeEmail = String(currentUser?.email || "").trim().toLowerCase();
+  const adminEmails = getAdminEmails().map((email) => String(email || "").trim().toLowerCase());
+  const seededAdmin = Boolean(safeEmail && adminEmails.includes(safeEmail));
+  const role = existingRow?.role || (seededAdmin ? "admin" : (profile?.role || defaultProfile.role));
   const accountStatus = existingRow?.account_status
-    || "active";
+    || (role === "admin" ? "active" : "pending");
   return {
     auth_user_id: currentUser.id,
     email: currentUser.email || null,
