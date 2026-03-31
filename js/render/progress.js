@@ -1,6 +1,28 @@
 import { state } from "../state.js";
-import { buildEmptyState, escapeHtml, formatShortDate } from "../utils.js";
+import { buildEmptyState, dayKey, escapeHtml, formatShortDate } from "../utils.js";
 import { icon } from "../ui.js";
+
+function findSessionForDate(dateStr) {
+  if (!dateStr || !state.history?.length) return null;
+  const target = dayKey(dateStr);
+  return state.history.find((entry) => entry.type === "training" && dayKey(entry.date) === target) || null;
+}
+
+function renderSessionInfo(session) {
+  if (!session) return "";
+  const parts = [
+    session.title || "Séance",
+    session.durationRealMin ? `${session.durationRealMin} min` : "",
+    session.zone || "",
+    session.coachNote || ""
+  ].filter(Boolean);
+  return `
+    <div class="progress-photo-session-info">
+      <strong>Séance du jour</strong><br/>
+      ${escapeHtml(parts.join(" · "))}
+    </div>
+  `;
+}
 
 function renderTimeline(entries) {
   if (!entries.length) {
@@ -14,10 +36,18 @@ function renderTimeline(entries) {
 
   return `
     <div class="progress-photo-timeline">
-      ${entries.map((entry) => `
+      ${entries.map((entry) => {
+        const session = findSessionForDate(entry.date);
+        const captionParts = [
+          entry.zone,
+          formatShortDate(entry.date),
+          entry.weightKg ? `${entry.weightKg} kg` : "",
+          entry.context || ""
+        ].filter(Boolean);
+        return `
         <article class="progress-photo-card">
-          <div class="progress-photo-media">
-            <img src="${entry.photoDataUrl}" alt="Progression ${escapeHtml(entry.zone)} du ${escapeHtml(formatShortDate(entry.date))}" />
+          <div class="progress-photo-media" data-action="open-lightbox" data-src="${entry.photoDataUrl}" data-caption="${escapeHtml(captionParts.join(" · "))}">
+            <img src="${entry.photoDataUrl}" alt="Progression ${escapeHtml(entry.zone)} du ${escapeHtml(formatShortDate(entry.date))}" loading="lazy" />
           </div>
           <div class="progress-photo-copy">
             <div class="progress-photo-head">
@@ -30,9 +60,10 @@ function renderTimeline(entries) {
               ${entry.context ? `<span class="pill">${escapeHtml(entry.context)}</span>` : ""}
             </div>
             ${entry.note ? `<p class="muted">${escapeHtml(entry.note)}</p>` : ""}
+            ${renderSessionInfo(session)}
           </div>
         </article>
-      `).join("")}
+      `}).join("")}
     </div>
   `;
 }

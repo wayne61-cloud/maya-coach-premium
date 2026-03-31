@@ -30,6 +30,15 @@ import { readErrorMessage } from "./utils.js";
 import { APP_VERSION } from "./version.js";
 import { appendExerciseToCustomWorkout, applyFeedback, buildAdjustedPlan, buildCustomPlanFromDraft, buildCustomWorkoutCoachAlerts, buildNoushiChallengePlan, createCustomWorkoutSession, createProtocolHistoryEntry, finishWorkout, historyEntryToPlan, removeCustomWorkoutSession, resetCustomWorkoutDraft, setActiveCustomWorkoutSession, setCustomWorkoutDraft, startPlan, workoutDoneAction, workoutModifyAction, workoutSkipAction } from "./workout.js";
 
+/* ── Debounce for search inputs ── */
+const debouncedRefresh = (() => {
+  let timer = 0;
+  return (delay = 120) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => refreshCurrentPage(), delay);
+  };
+})();
+
 function showToast(message) {
   const toast = document.getElementById("toast");
   toast.textContent = message;
@@ -904,19 +913,29 @@ async function routeAction(action, target) {
           : nextStatus === "suspended"
             ? "suspendre"
             : "réactiver";
+      let reason = "";
+      if (nextStatus !== "active") {
+        reason = window.prompt(`Motif pour ${label} cet utilisateur (optionnel):`, "") ?? "";
+        if (reason === null) return;
+      }
       if (!window.confirm(`Confirmer: ${label} cet utilisateur ?`)) return;
-      await setAdminUserStatus(target.dataset.id, nextStatus);
+      await setAdminUserStatus(target.dataset.id, nextStatus, reason);
       showToast(`Statut mis à jour: ${nextStatus}`);
       refreshCurrentPage();
       return;
     }
     case "admin-delete-account": {
-      const reason = window.prompt("Raison de la suppression du compte", "");
-      if (!reason) return;
-      if (!window.confirm("Confirmer la suppression de ce compte et la purge de ses données dans l’app ?")) return;
-      await deleteAdminUserAccount(target.dataset.id, reason);
-      showToast("Compte supprimé");
-      refreshCurrentPage();
+      openAdminReasonModal(target.dataset.id);
+      return;
+    }
+    case "open-lightbox": {
+      const src = target.dataset.src || target.querySelector("img")?.src || "";
+      const caption = target.dataset.caption || "";
+      if (src) openLightbox(src, caption);
+      return;
+    }
+    case "close-admin-modal": {
+      closeAdminReasonModal();
       return;
     }
     case "start-noushi-challenge": {
@@ -1037,6 +1056,63 @@ async function routeAction(action, target) {
   }
 }
 
+/* ── Lightbox ── */
+
+function openLightbox(src, caption = "") {
+  const overlay = document.getElementById("lightboxOverlay");
+  const img = document.getElementById("lightboxImg");
+  const cap = document.getElementById("lightboxCaption");
+  if (!overlay || !img) return;
+  img.src = src;
+  cap.textContent = caption;
+  overlay.hidden = false;
+  document.body.style.overflow = "hidden";
+}
+
+function closeLightbox() {
+  const overlay = document.getElementById("lightboxOverlay");
+  if (!overlay) return;
+  overlay.hidden = true;
+  document.getElementById("lightboxImg").src = "";
+  document.body.style.overflow = "";
+}
+
+/* ── Admin reason modal ── */
+
+let pendingDeleteAccountId = "";
+
+function openAdminReasonModal(profileId) {
+  pendingDeleteAccountId = profileId;
+  const modal = document.getElementById("adminReasonModal");
+  const input = document.getElementById("adminReasonInput");
+  if (!modal) return;
+  if (input) input.value = "";
+  modal.hidden = false;
+}
+
+function closeAdminReasonModal() {
+  const modal = document.getElementById("adminReasonModal");
+  if (modal) modal.hidden = true;
+  pendingDeleteAccountId = "";
+}
+
+async function confirmAdminDeleteAccount() {
+  const reason = String(document.getElementById("adminReasonInput")?.value || "").trim();
+  if (!reason) {
+    showToast("Un motif est requis pour supprimer le compte");
+    return;
+  }
+  if (!pendingDeleteAccountId) return;
+  closeAdminReasonModal();
+  try {
+    await deleteAdminUserAccount(pendingDeleteAccountId, reason);
+    showToast("Compte supprimé");
+    refreshCurrentPage();
+  } catch (error) {
+    showToast(readErrorMessage(error, "Erreur suppression"));
+  }
+}
+
 function bindEvents() {
   document.getElementById("mainNav").addEventListener("click", async (event) => {
     const button = event.target.closest(".nav-btn");
@@ -1053,6 +1129,30 @@ function bindEvents() {
     const target = event.target.closest("[data-action]");
     if (!target) return;
     await routeAction(target.dataset.action, target);
+  });
+
+  // Lightbox close
+  document.getElementById("lightboxOverlay")?.addEventListener("click", (event) => {
+    if (event.target === event.currentTarget || event.target.id === "lightboxClose") {
+      closeLightbox();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeLightbox();
+      closeAdminReasonModal();
+    }
+  });
+
+  // Admin reason modal confirm
+  document.getElementById("adminReasonConfirm")?.addEventListener("click", () => {
+    confirmAdminDeleteAccount();
+  });
+  document.getElementById("adminReasonInput")?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      confirmAdminDeleteAccount();
+    }
   });
 
   document.addEventListener("input", (event) => {
@@ -1075,7 +1175,7 @@ function bindEvents() {
     }
     if (target.id === "globalSearch") {
       state.globalSearch = target.value;
-      refreshCurrentPage();
+      debouncedRefresh(150);
     }
     if (target.id === "iaTime") state.aiDraft.time = target.value;
     if (target.id === "iaPlace") state.aiDraft.place = target.value;
@@ -1085,18 +1185,19 @@ function bindEvents() {
     if (target.id === "iaLevel") state.aiDraft.level = target.value;
     if (target.id === "exoSearch") {
       state.exoFilter.search = target.value;
-      refreshCurrentPage();
+      debouncedRefresh(150);
     }
     if (target.id === "nutritionSearch") {
       state.nutritionFilter.search = target.value;
-      refreshCurrentPage();
+      debouncedRefresh(150);
     }
     if (target.id === "customSessionSearch") {
       state.customWorkoutSearch = target.value;
-      refreshCurrentPage();
+      debouncedRefresh(150);
     }
     if (target.dataset?.adminFilter === "filter") {
-      updateAdminFilter("filter", target.value);
+      state.adminRuntime = { ...(state.adminRuntime || {}), filter: target.value };
+      debouncedRefresh(200);
       return;
     }
     if (target.dataset?.customWorkoutField) {

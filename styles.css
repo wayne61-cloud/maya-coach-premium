@@ -125,8 +125,11 @@ textarea {
   padding: 6px 12px;
   border-bottom: 1px solid rgba(255, 226, 188, 0.08);
   background: linear-gradient(180deg, rgba(20, 20, 20, 0.98), rgba(11, 11, 11, 0.94));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   position: relative;
   z-index: 5;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.2);
 }
 
 .header-title {
@@ -2747,22 +2750,24 @@ summary {
 .toast {
   position: fixed;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) translateY(8px);
   top: 66px;
   background: rgba(32, 18, 5, 0.95);
   border: 1px solid rgba(255, 206, 106, 0.36);
   border-radius: 12px;
-  padding: 8px 11px;
+  padding: 8px 14px;
   font-size: 0.78rem;
   color: #ffe3b0;
   z-index: 30;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+  backdrop-filter: blur(10px);
 }
 
 .toast.show {
   opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 .onboarding-shell {
@@ -5026,4 +5031,222 @@ summary {
     padding: 6px 8px;
     font-size: 0.58rem;
   }
+}
+
+/* ── Lightbox ── */
+
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.92);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+
+.lightbox-overlay[hidden] {
+  display: none !important;
+}
+
+.lightbox-close {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  right: 14px;
+  z-index: 201;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 1.6rem;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.lightbox-close:hover,
+.lightbox-close:active {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.lightbox-body {
+  max-width: min(94vw, 600px);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.lightbox-img {
+  max-width: 100%;
+  max-height: 76vh;
+  border-radius: 14px;
+  object-fit: contain;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+}
+
+.lightbox-caption {
+  color: #e8e0d4;
+  text-align: center;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  max-width: 420px;
+  padding: 0 12px;
+}
+
+.lightbox-caption:empty {
+  display: none;
+}
+
+/* ── Admin moderation modal ── */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(6, 6, 6, 0.72);
+  backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  animation: fadeIn 0.2s ease;
+}
+
+.modal-overlay[hidden] {
+  display: none !important;
+}
+
+.modal-dialog {
+  width: min(400px, 90vw);
+  padding: 20px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(22, 22, 22, 0.99), rgba(10, 10, 10, 0.99));
+  border: 1px solid rgba(255, 223, 167, 0.1);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.modal-head h3 {
+  font-size: 1rem;
+  color: var(--text-strong);
+}
+
+/* ── Photo card clickable ── */
+
+.progress-photo-media {
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.progress-photo-media:hover,
+.progress-photo-media:active {
+  transform: scale(1.03);
+  box-shadow: 0 8px 20px rgba(244, 197, 55, 0.12);
+}
+
+/* ── Smooth page transitions ── */
+
+.page {
+  will-change: opacity;
+  transition: opacity 0.15s ease;
+}
+
+/* ── Improved card hover states ── */
+
+.card {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-user-card {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.admin-user-card:hover {
+  border-color: rgba(255, 230, 198, 0.14);
+  transform: translateY(-1px);
+}
+
+/* ── Session description on photo card ── */
+
+.progress-photo-session-info {
+  margin-top: 4px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(134, 187, 255, 0.06);
+  border: 1px solid rgba(134, 187, 255, 0.1);
+  font-size: 0.76rem;
+  color: var(--text-soft);
+  line-height: 1.45;
+}
+
+.progress-photo-session-info strong {
+  color: var(--accent-stats);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* ── Improved button transitions ── */
+
+.btn {
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+/* ── Better toast animation ── */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translate(-50%, 20px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* ── Improved header glow ── */
+
+.header {
+  transition: box-shadow 0.2s ease;
+}
+
+/* ── Admin photo card improvements ── */
+
+.admin-photo-card .progress-photo-media {
+  border: 1px solid rgba(255, 230, 198, 0.08);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.admin-photo-card .progress-photo-media img {
+  transition: transform 0.2s ease;
+}
+
+.admin-photo-card .progress-photo-media:hover img {
+  transform: scale(1.05);
+}
+
+/* ── Subtle gradient improvements ── */
+
+.bottom-sheet {
+  transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.sheet-backdrop {
+  transition: opacity 0.2s ease;
 }
