@@ -570,17 +570,9 @@ security definer
 set search_path = public
 as $$
 declare
-  next_role text := lower(coalesce(new.raw_user_meta_data->>'app_role', new.raw_user_meta_data->>'role', 'user'));
-  next_status text := lower(coalesce(new.raw_user_meta_data->>'account_status', ''));
+  next_role text := 'user';
+  next_status text := 'active';
 begin
-  if next_role not in ('admin', 'user') then
-    next_role := 'user';
-  end if;
-
-  if next_status not in ('pending', 'active', 'suspended', 'banned') then
-    next_status := 'active';
-  end if;
-
   insert into public.profiles (
     auth_user_id,
     email,
@@ -623,6 +615,33 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_auth_user_created();
+
+create or replace function public.guard_profile_system_fields()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is not null and not public.is_admin_user() then
+    new.auth_user_id := old.auth_user_id;
+    new.email := old.email;
+    new.role := old.role;
+    new.account_status := old.account_status;
+    new.moderation_reason := old.moderation_reason;
+    new.deleted_at := old.deleted_at;
+    new.created_at := old.created_at;
+  end if;
+
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+drop trigger if exists on_profiles_guard_system_fields on public.profiles;
+create trigger on_profiles_guard_system_fields
+  before update on public.profiles
+  for each row execute procedure public.guard_profile_system_fields();
 
 drop policy if exists "profiles_admin_access" on profiles;
 create policy "profiles_admin_access" on profiles
@@ -791,3 +810,10 @@ set
   updated_at = now()
 where role <> 'admin'
   and coalesce(account_status, 'active') = 'pending';
+
+-- Supabase mode: promote admin accounts explicitly from SQL instead of trusting
+-- public client metadata or config values.
+-- Example:
+-- update public.profiles
+-- set role = 'admin', account_status = 'active', updated_at = now()
+-- where email = 'admin@maya.fitness';

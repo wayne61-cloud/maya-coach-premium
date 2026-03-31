@@ -455,16 +455,112 @@ function buildAuthResponse({ userRow, session }) {
   };
 }
 
-function buildAdminDashboard() {
-  const users = listUsers().map((userRow) => ({
+function buildAdminNoteItem({ id, kind, title, date, description, context = "" }) {
+  return {
+    id,
+    kind,
+    title,
+    date,
+    description,
+    context
+  };
+}
+
+function buildAdminNotes(userRow) {
+  const payload = parseStateJson(userRow.state_json, userRow);
+  const notes = [];
+
+  (Array.isArray(payload.history) ? payload.history : []).forEach((entry) => {
+    const exerciseCount = Array.isArray(entry.exercises) ? entry.exercises.length : 0;
+    const details = [
+      entry.coachNote || "",
+      entry.feedback ? `feedback ${entry.feedback}` : "",
+      exerciseCount ? `${exerciseCount} exercice(s)` : ""
+    ].filter(Boolean).join(" • ");
+
+    notes.push(buildAdminNoteItem({
+      id: `history:${entry.id || randomId("history")}`,
+      kind: entry.type || "history",
+      title: entry.title || "Activité",
+      date: entry.date || "",
+      description: details || "Aucun texte détaillé associé à cette activité.",
+      context: [entry.objective || "", entry.zone || "", entry.place || ""].filter(Boolean).join(" • ")
+    }));
+  });
+
+  (Array.isArray(payload.nutritionHistory) ? payload.nutritionHistory : []).forEach((entry, index) => {
+    notes.push(buildAdminNoteItem({
+      id: `nutrition:${entry.id || index}`,
+      kind: "nutrition",
+      title: entry.goal ? `Nutrition ${entry.goal}` : "Nutrition",
+      date: entry.date || "",
+      description: [
+        entry.calories ? `${entry.calories} kcal` : "",
+        entry.trainingLoad ? `charge ${entry.trainingLoad}` : "",
+        Array.isArray(entry.mealIds) && entry.mealIds.length ? `${entry.mealIds.length} repas planifiés` : ""
+      ].filter(Boolean).join(" • ") || "Aucun détail nutritionnel disponible.",
+      context: entry.goal || ""
+    }));
+  });
+
+  return notes
+    .sort((left, right) => new Date(right.date || 0).getTime() - new Date(left.date || 0).getTime())
+    .slice(0, 40);
+}
+
+function resolveLastActivityAt(payload, userRow) {
+  const candidates = [
+    userRow.last_login_at,
+    userRow.updated_at,
+    payload.updatedAt,
+    ...(Array.isArray(payload.history) ? payload.history.map((entry) => entry?.date) : []),
+    ...(Array.isArray(payload.nutritionHistory) ? payload.nutritionHistory.map((entry) => entry?.date) : []),
+    ...(Array.isArray(payload.visualProgressEntries) ? payload.visualProgressEntries.map((entry) => entry?.date) : [])
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .map((value) => ({ raw: value, ts: new Date(value).getTime() }))
+    .filter((item) => Number.isFinite(item.ts))
+    .sort((left, right) => right.ts - left.ts);
+
+  return candidates[0]?.raw || userRow.created_at || "";
+}
+
+function buildAdminUserRecord(userRow) {
+  const payload = parseStateJson(userRow.state_json, userRow);
+  const profile = payload.profile || {};
+
+  return {
     id: userRow.id,
     authUserId: userRow.id,
     email: userRow.email,
-    name: userRow.display_name || userRow.email,
+    name: profile.name || userRow.display_name || userRow.email,
+    bio: profile.bio || "",
+    age: profile.age || "",
+    weightKg: profile.weightKg || "",
     role: userRow.role,
     accountStatus: userRow.account_status,
-    createdAt: userRow.created_at || ""
-  }));
+    moderationReason: profile.moderationReason || "",
+    deletedAt: profile.deletedAt || "",
+    goal: profile.goal || "muscle",
+    level: profile.level || "2",
+    frequency: profile.frequency || "3",
+    place: profile.place || "mixte",
+    sessionTime: profile.sessionTime || "35",
+    preferredSplit: profile.preferredSplit || "adaptive",
+    foodPreference: profile.foodPreference || "omnivore",
+    recoveryPreference: profile.recoveryPreference || "equilibre",
+    coachTone: profile.coachTone || "direct",
+    photoPath: profile.photoDataUrl || "",
+    createdAt: userRow.created_at || "",
+    updatedAt: userRow.updated_at || "",
+    lastLoginAt: userRow.last_login_at || "",
+    lastActivityAt: resolveLastActivityAt(payload, userRow)
+  };
+}
+
+function buildAdminDashboard() {
+  const users = listUsers().map((userRow) => buildAdminUserRecord(userRow));
 
   const photos = listUsers().flatMap((userRow) => {
     const payload = parseStateJson(userRow.state_json, userRow);
@@ -489,6 +585,20 @@ function buildAdminDashboard() {
   }).sort((left, right) => new Date(right.date || right.createdAt || 0).getTime() - new Date(left.date || left.createdAt || 0).getTime());
 
   return { users, photos };
+}
+
+function buildAdminUserDetail(userId) {
+  const userRow = getUserById(userId);
+  if (!userRow) {
+    const error = new Error("Utilisateur introuvable");
+    error.status = 404;
+    throw error;
+  }
+
+  return {
+    profile: buildAdminUserRecord(userRow),
+    notes: buildAdminNotes(userRow)
+  };
 }
 
 function deletePhotoByCompositeId(photoId) {
@@ -596,9 +706,15 @@ function json(res, req, code, body) {
   const origin = resolveOrigin(req);
   res.writeHead(code, {
     "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type,Authorization",
+    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+    "Cross-Origin-Resource-Policy": "same-origin",
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
     "Vary": "Origin"
   });
   res.end(JSON.stringify(body));
@@ -782,6 +898,18 @@ const server = http.createServer(async (req, res) => {
         ok: true,
         ...buildAdminDashboard(),
         updatedAt: nowIso()
+      });
+    }
+
+    const matchUserDetailRoute = pathname.match(/^\/api\/admin\/users\/([^/]+)\/detail$/);
+    if (matchUserDetailRoute && req.method === "GET") {
+      const auth = getAuthenticatedUser(req);
+      if (!auth) return json(res, req, 401, { error: "Session invalide ou expirée" });
+      if (auth.user.role !== "admin") return json(res, req, 403, { error: "Accès admin requis" });
+
+      return json(res, req, 200, {
+        ok: true,
+        ...buildAdminUserDetail(decodeURIComponent(matchUserDetailRoute[1]))
       });
     }
 

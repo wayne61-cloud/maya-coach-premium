@@ -52,6 +52,7 @@ Available endpoints:
 - `POST /api/sync/push`
 - `PUT /api/profile`
 - `GET /api/admin/dashboard`
+- `GET /api/admin/users/:id/detail`
 - `PATCH /api/admin/users/:id/status`
 - `DELETE /api/admin/photos/:id`
 - `DELETE /api/admin/users/:id/photos`

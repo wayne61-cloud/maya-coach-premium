@@ -1,6 +1,5 @@
 import {
   getManagedBackendProductConfig,
-  getAdminEmails,
   hasCloudProductConfig,
   hasManagedBackendProductConfig,
   getSupabaseProductConfig,
@@ -52,11 +51,6 @@ let supabaseClientPromise = null;
 let authListenerBound = false;
 let suppressSupabaseAuthListener = false;
 let profileRowCache = null;
-
-function isConfiguredAdminEmail(email) {
-  const safeEmail = String(email || "").trim().toLowerCase();
-  return getAdminEmails().map((item) => String(item || "").trim().toLowerCase()).includes(safeEmail);
-}
 
 function getCloudMode() {
   if (hasSupabaseProductConfig()) return "supabase";
@@ -221,6 +215,7 @@ function resetUserScopedState({ preserveProfileName = "" } = {}) {
   state.onboardingStep = 0;
   state.syncRuntime = { status: "idle", lastSyncAt: "", error: "" };
   state.adminRuntime = {
+    section: "profiles",
     users: [],
     photos: [],
     filter: "",
@@ -235,7 +230,29 @@ function resetUserScopedState({ preserveProfileName = "" } = {}) {
     detailError: "",
     detailUser: null,
     detailPhotos: [],
-    detailNotes: []
+    detailNotes: [],
+    deleteDialogOpen: false,
+    deleteTargetId: "",
+    deleteTargetName: "",
+    deleteReason: "",
+    deleteError: "",
+    deleteSubmitting: false
+  };
+  state.photoViewer = {
+    open: false,
+    source: "progress",
+    sourceId: "",
+    imageUrl: "",
+    date: "",
+    zone: "",
+    context: "",
+    note: "",
+    weightKg: "",
+    heightCm: "",
+    ownerName: "",
+    ownerEmail: "",
+    sessions: [],
+    dayNotes: []
   };
 
   persistProfile();
@@ -454,10 +471,7 @@ async function applyPreviewSession(sessionRecord) {
 }
 
 function buildProfilePayload(profile, currentUser, photoPath = "", existingRow = null) {
-  const isAdminEmail = isConfiguredAdminEmail(currentUser?.email);
-  const role = isAdminEmail
-    ? "admin"
-    : (existingRow?.role || profile?.role || defaultProfile.role);
+  const role = existingRow?.role || profile?.role || defaultProfile.role;
   const accountStatus = existingRow?.account_status
     || "active";
   return {
@@ -1501,9 +1515,7 @@ export async function signUpWithPassword({ displayName, email, password }) {
       } else {
         setSignedOutState({
           mode: "supabase",
-          notice: isConfiguredAdminEmail(safeEmail)
-            ? "Compte admin créé. Vérifie ton email pour confirmer la session si la confirmation est activée."
-            : "Compte créé. Vérifie ton email si la confirmation est activée, puis connecte-toi."
+          notice: "Compte créé. Vérifie ton email si la confirmation est activée, puis connecte-toi."
         });
       }
       return data;
@@ -1718,27 +1730,30 @@ function requireAdminAccess() {
 function normalizeAdminProfileRow(row) {
   return {
     id: row.id,
-    authUserId: row.auth_user_id,
+    authUserId: row.auth_user_id || row.authUserId || row.id,
     email: row.email || "",
     name: row.name || "",
     bio: row.bio || "",
     age: row.age != null ? String(row.age) : "",
-    weightKg: row.weight_kg != null ? String(row.weight_kg) : "",
+    weightKg: row.weight_kg != null ? String(row.weight_kg) : (row.weightKg != null ? String(row.weightKg) : ""),
     role: row.role || "user",
-    accountStatus: row.account_status || "active",
-    moderationReason: row.moderation_reason || "",
-    deletedAt: row.deleted_at || "",
+    accountStatus: row.account_status || row.accountStatus || "active",
+    moderationReason: row.moderation_reason || row.moderationReason || "",
+    deletedAt: row.deleted_at || row.deletedAt || "",
     goal: row.goal || defaultProfile.goal,
     level: row.level || defaultProfile.level,
     frequency: row.frequency || defaultProfile.frequency,
     place: row.place || defaultProfile.place,
-    sessionTime: row.session_time || defaultProfile.sessionTime,
-    preferredSplit: row.preferred_split || defaultProfile.preferredSplit,
-    foodPreference: row.food_preference || defaultProfile.foodPreference,
-    recoveryPreference: row.recovery_preference || defaultProfile.recoveryPreference,
-    coachTone: row.coach_tone || defaultProfile.coachTone,
-    photoPath: row.photo_path || "",
-    createdAt: row.created_at || ""
+    sessionTime: row.session_time || row.sessionTime || defaultProfile.sessionTime,
+    preferredSplit: row.preferred_split || row.preferredSplit || defaultProfile.preferredSplit,
+    foodPreference: row.food_preference || row.foodPreference || defaultProfile.foodPreference,
+    recoveryPreference: row.recovery_preference || row.recoveryPreference || defaultProfile.recoveryPreference,
+    coachTone: row.coach_tone || row.coachTone || defaultProfile.coachTone,
+    photoPath: row.photo_path || row.photoPath || "",
+    createdAt: row.created_at || row.createdAt || "",
+    updatedAt: row.updated_at || row.updatedAt || row.created_at || row.createdAt || "",
+    lastLoginAt: row.last_login_at || row.lastLoginAt || "",
+    lastActivityAt: row.last_activity_at || row.lastActivityAt || row.last_login_at || row.lastLoginAt || row.updated_at || row.updatedAt || row.created_at || row.createdAt || ""
   };
 }
 
@@ -1746,18 +1761,18 @@ function normalizeAdminPhotoRow(row) {
   const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
   return {
     id: row.id,
-    profileId: row.profile_id,
-    userName: profile?.name || "",
-    userEmail: profile?.email || "",
-    date: row.photo_date,
+    profileId: row.profile_id || row.profileId,
+    userName: row.userName || profile?.name || "",
+    userEmail: row.userEmail || profile?.email || "",
+    date: row.photo_date || row.date,
     zone: row.zone || "",
-    weightKg: row.weight_kg != null ? String(row.weight_kg) : "",
-    heightCm: row.height_cm != null ? String(row.height_cm) : "",
+    weightKg: row.weight_kg != null ? String(row.weight_kg) : (row.weightKg != null ? String(row.weightKg) : ""),
+    heightCm: row.height_cm != null ? String(row.height_cm) : (row.heightCm != null ? String(row.heightCm) : ""),
     context: row.context || "",
     note: row.note || "",
-    photoStoragePath: row.photo_storage_path || "",
-    photoDataUrl: row.photo_signed_url || "",
-    createdAt: row.created_at || ""
+    photoStoragePath: row.photo_storage_path || row.photoStoragePath || "",
+    photoDataUrl: row.photo_signed_url || row.photoDataUrl || "",
+    createdAt: row.created_at || row.createdAt || ""
   };
 }
 
@@ -1815,7 +1830,25 @@ export async function openAdminUserDetail(profileId, tab = "photos") {
   };
 
   if (isManagedBackendMode()) {
-    throw new Error("Le détail de modération n’est pas disponible sur ce backend.");
+    try {
+      const data = await backendRequest(`/api/admin/users/${encodeURIComponent(profileId)}/detail`);
+      state.adminRuntime = {
+        ...(state.adminRuntime || {}),
+        detailLoading: false,
+        detailError: "",
+        detailUser: data?.profile ? normalizeAdminProfileRow(data.profile) : selectedUser,
+        detailPhotos: syncAdminDetailPhotos(profileId),
+        detailNotes: Array.isArray(data?.notes) ? data.notes.map(normalizeAdminNoteItem) : []
+      };
+      return state.adminRuntime;
+    } catch (error) {
+      state.adminRuntime = {
+        ...(state.adminRuntime || {}),
+        detailLoading: false,
+        detailError: error instanceof Error ? error.message : String(error)
+      };
+      throw error;
+    }
   }
 
   const client = await getSupabaseClient();
@@ -1856,14 +1889,16 @@ export async function refreshAdminDashboard() {
 
     try {
       const data = await backendRequest("/api/admin/dashboard");
-      const normalizedUsers = Array.isArray(data.users) ? data.users : [];
-      const normalizedPhotos = Array.isArray(data.photos) ? data.photos : [];
+      const normalizedUsers = Array.isArray(data.users) ? data.users.map(normalizeAdminProfileRow) : [];
+      const normalizedPhotos = Array.isArray(data.photos) ? data.photos.map(normalizeAdminPhotoRow) : [];
       const selectedProfileId = state.adminRuntime?.selectedProfileId || "";
+      const selectedUser = selectedProfileId ? normalizedUsers.find((user) => user.id === selectedProfileId) || null : null;
       state.adminRuntime = {
         ...(state.adminRuntime || {}),
         users: normalizedUsers,
         photos: normalizedPhotos,
         detailPhotos: selectedProfileId ? normalizedPhotos.filter((photo) => photo.profileId === selectedProfileId) : [],
+        detailUser: selectedUser || state.adminRuntime?.detailUser || null,
         loading: false,
         error: "",
         lastFetchedAt: data.updatedAt || new Date().toISOString()
@@ -1890,7 +1925,7 @@ export async function refreshAdminDashboard() {
     const [profilesResult, photosResult] = await Promise.all([
       client
         .from("profiles")
-        .select("id, auth_user_id, email, name, bio, age, weight_kg, role, account_status, moderation_reason, deleted_at, goal, level, frequency, place, session_time, preferred_split, food_preference, recovery_preference, coach_tone, photo_path, created_at")
+        .select("id, auth_user_id, email, name, bio, age, weight_kg, role, account_status, moderation_reason, deleted_at, goal, level, frequency, place, session_time, preferred_split, food_preference, recovery_preference, coach_tone, photo_path, created_at, updated_at")
         .order("created_at", { ascending: false }),
       client
         .from("progress_photos")
@@ -1925,12 +1960,14 @@ export async function refreshAdminDashboard() {
     const normalizedUsers = (profilesResult.data || []).map(normalizeAdminProfileRow);
     const normalizedPhotos = signedPhotos.map(normalizeAdminPhotoRow);
     const selectedProfileId = state.adminRuntime?.selectedProfileId || "";
+    const selectedUser = selectedProfileId ? normalizedUsers.find((user) => user.id === selectedProfileId) || null : null;
 
     state.adminRuntime = {
       ...(state.adminRuntime || {}),
       users: normalizedUsers,
       photos: normalizedPhotos,
       detailPhotos: selectedProfileId ? normalizedPhotos.filter((photo) => photo.profileId === selectedProfileId) : [],
+      detailUser: selectedUser || state.adminRuntime?.detailUser || null,
       loading: false,
       error: "",
       lastFetchedAt: new Date().toISOString()

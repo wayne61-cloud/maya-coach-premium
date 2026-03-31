@@ -326,6 +326,7 @@ export const state = {
     lastAlertSignature: ""
   },
   adminRuntime: {
+    section: "profiles",
     users: [],
     photos: [],
     filter: "",
@@ -340,7 +341,29 @@ export const state = {
     detailError: "",
     detailUser: null,
     detailPhotos: [],
-    detailNotes: []
+    detailNotes: [],
+    deleteDialogOpen: false,
+    deleteTargetId: "",
+    deleteTargetName: "",
+    deleteReason: "",
+    deleteError: "",
+    deleteSubmitting: false
+  },
+  photoViewer: {
+    open: false,
+    source: "progress",
+    sourceId: "",
+    imageUrl: "",
+    date: "",
+    zone: "",
+    context: "",
+    note: "",
+    weightKg: "",
+    heightCm: "",
+    ownerName: "",
+    ownerEmail: "",
+    sessions: [],
+    dayNotes: []
   },
   coachSheetOpen: false,
   nutritionSheetOpen: false

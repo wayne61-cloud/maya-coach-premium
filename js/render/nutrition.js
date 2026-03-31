@@ -1,8 +1,23 @@
-import { getAllRecipeTags, searchRecipes } from "../catalog.js";
+import { getAllRecipeTags, hasValidVideoId, searchRecipes } from "../catalog.js";
 import { getSharedDashboardData } from "../insights.js";
+import { ensureLiteYouTubeEmbed } from "../lite-youtube.js";
 import { state } from "../state.js";
-import { buildEmptyState, escapeHtml } from "../utils.js";
+import { buildEmptyState, escapeHtml, getYouTubeThumbnail, getYouTubeUrl } from "../utils.js";
 import { icon, renderNumberTicker } from "../ui.js";
+
+function renderRecipeVideo(recipe) {
+  if (!recipe.videoId) {
+    return `<div class="video-missing">Vidéo recette non renseignée.</div>`;
+  }
+  if (hasValidVideoId(recipe.videoId)) {
+    return `<lite-youtube videoid="${escapeHtml(recipe.videoId)}" title="${escapeHtml(recipe.nom)}" playlabel="Lire la vidéo ${escapeHtml(recipe.nom)}" params="rel=0&modestbranding=2"></lite-youtube>`;
+  }
+  return `
+    <a class="video-fallback" href="${getYouTubeUrl(recipe.videoId)}" target="_blank" rel="noreferrer">
+      <img src="${getYouTubeThumbnail(recipe.videoId)}" alt="${escapeHtml(recipe.nom)}" />
+    </a>
+  `;
+}
 
 function renderNutritionDayPlan(shared) {
   const { nutrition } = shared;
@@ -119,11 +134,27 @@ function renderRecipeCard(recipe) {
         ${recipe.tags.slice(0, 3).map((tag) => `<span class="pill">${escapeHtml(tag)}</span>`).join("")}
       </div>
 
+      <div class="video-container">${renderRecipeVideo(recipe)}</div>
+      <div class="video-links">
+        <a class="pill pill-soft" href="${getYouTubeUrl(recipe.videoId)}" target="_blank" rel="noreferrer">Ouvrir sur YouTube</a>
+        <span class="pill">${escapeHtml(recipe.difficulte)}</span>
+      </div>
+
       <details class="compact-details">
-        <summary>Ingrédients et étapes</summary>
-        <div class="coach-grid">
-          <div><strong>Ingrédients</strong><br>${recipe.ingredients.map((ingredient) => `• ${escapeHtml(ingredient)}`).join("<br>")}</div>
-          <div><strong>Étapes</strong><br>${recipe.steps.map((step, index) => `${index + 1}. ${escapeHtml(step)}`).join("<br>")}</div>
+        <summary>Préparation détaillée</summary>
+        <div class="coach-grid recipe-detail-grid">
+          <div>
+            <strong>Ingrédients</strong><br>${recipe.ingredients.map((ingredient) => `• ${escapeHtml(ingredient)}`).join("<br>")}
+          </div>
+          <div>
+            <strong>Étapes</strong><br>${recipe.steps.map((step, index) => `${index + 1}. ${escapeHtml(step)}`).join("<br><br>")}
+          </div>
+          <div>
+            <strong>Quand la placer</strong><br>${escapeHtml(recipe.moment)}
+          </div>
+          <div>
+            <strong>Substitutions</strong><br>${recipe.substitutions.map((item) => `• ${escapeHtml(item)}`).join("<br>")}
+          </div>
         </div>
       </details>
     </article>
@@ -131,6 +162,7 @@ function renderRecipeCard(recipe) {
 }
 
 export function renderNutrition(node) {
+  ensureLiteYouTubeEmbed().catch(() => {});
   const shared = getSharedDashboardData();
   const recipes = searchRecipes({
     query: state.nutritionFilter.search,

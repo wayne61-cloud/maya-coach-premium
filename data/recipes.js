@@ -10,8 +10,15 @@ export const RECIPES = [
     fats: 12,
     objectif: "maintenance",
     difficulte: "facile",
+    videoId: "j_ku8ZEJIrw",
     ingredients: ["60 g flocons d'avoine", "200 g skyr", "1 banane", "10 g graines de chia", "cannelle"],
-    steps: ["Mélange tous les ingrédients.", "Laisse 6 h au frais.", "Ajoute la cannelle juste avant de manger."],
+    steps: [
+      "Écrase la moitié de la banane dans un bocal ou un bol pour créer une base naturellement sucrée.",
+      "Ajoute le skyr, les flocons d'avoine et les graines de chia, puis mélange pendant 30 à 45 secondes jusqu'à ce qu'il n'y ait plus de zones sèches.",
+      "Verse 2 à 3 cuillères à soupe d'eau ou de lait si la texture est trop compacte, puis lisse la surface avec une cuillère.",
+      "Découpe le reste de la banane en rondelles, dépose-les sur le dessus et termine avec la cannelle.",
+      "Couvre et laisse reposer au frais au moins 6 heures. Au moment de servir, remue le fond et ajuste la texture avec un trait de lait si besoin."
+    ],
     tags: ["speed", "high-protein", "pre-workout", "sans-gluten"],
     moment: "petit-déjeuner ou collation pré-séance",
     substitutions: ["Remplace le skyr par un yaourt soja pour une version sans lactose.", "Utilise des fruits rouges à la place de la banane."]
@@ -27,8 +34,15 @@ export const RECIPES = [
     fats: 16,
     objectif: "masse",
     difficulte: "facile",
+    videoId: "_yUMHHK5OaE",
     ingredients: ["2 oeufs", "40 g whey vanille", "60 g flocons mixés", "100 g fromage blanc", "1 c. à café levure"],
-    steps: ["Mixe ou fouette tous les ingrédients.", "Fais cuire de petits pancakes 2 min par face.", "Sers avec fruits rouges ou beurre de cacahuète."],
+    steps: [
+      "Mixe les flocons pour obtenir une farine rapide, puis verse-les dans un saladier avec la whey et la levure.",
+      "Ajoute les oeufs et le fromage blanc, puis fouette jusqu'à obtenir une pâte lisse, épaisse mais encore coulante.",
+      "Laisse reposer 2 minutes pendant que la poêle chauffe à feu moyen avec un voile de matière grasse.",
+      "Verse de petits tas de pâte, attends que des bulles apparaissent en surface, puis retourne-les délicatement pour finir 1 à 2 minutes sur la seconde face.",
+      "Empile les pancakes, ajoute les toppings choisis juste avant de servir pour garder du moelleux."
+    ],
     tags: ["high-protein", "post-workout", "speed"],
     moment: "petit-déjeuner post-workout",
     substitutions: ["Whey végétale possible.", "Purée d'amande à la place du beurre de cacahuète."]
@@ -44,8 +58,15 @@ export const RECIPES = [
     fats: 11,
     objectif: "maintenance",
     difficulte: "facile",
+    videoId: "PuqhmsnNbwc",
     ingredients: ["250 g skyr", "30 g granola", "1 kiwi", "10 g graines", "miel léger"],
-    steps: ["Verse le skyr dans un bol.", "Ajoute fruits, granola et graines.", "Termine avec un filet de miel si besoin."],
+    steps: [
+      "Verse le skyr dans un bol froid et détends-le légèrement à la cuillère pour obtenir une texture plus crémeuse.",
+      "Pèle le kiwi, coupe-le en petits quartiers réguliers pour bien répartir l'acidité dans chaque bouchée.",
+      "Répartis le granola d'un côté et les graines de l'autre afin de garder du croquant jusqu'au service.",
+      "Ajoute les morceaux de kiwi sur le dessus en laissant une partie du skyr visible pour une meilleure prise à la cuillère.",
+      "Termine avec un filet très léger de miel si tu veux plus de douceur, puis sers immédiatement."
+    ],
     tags: ["high-protein", "speed", "post-workout"],
     moment: "petit-déjeuner ou collation",
     substitutions: ["Yaourt coco + protéine en poudre pour sans lactose.", "Pomme ou banane selon saison."]
@@ -61,8 +82,15 @@ export const RECIPES = [
     fats: 24,
     objectif: "masse",
     difficulte: "facile",
+    videoId: "fU-M-66smnE",
     ingredients: ["180 g poulet", "140 g riz cuit", "1/2 avocat", "concombre", "tomates", "jus de citron"],
-    steps: ["Grille le poulet.", "Assemble le riz, les légumes et l'avocat.", "Ajoute le poulet et un assaisonnement citronné."],
+    steps: [
+      "Assaisonne le poulet avec sel, poivre et paprika, puis saisis-le 4 à 5 minutes de chaque côté jusqu'à ce qu'il soit bien doré.",
+      "Laisse reposer la viande 2 minutes avant de la trancher pour conserver les jus et éviter qu'elle ne sèche.",
+      "Réchauffe le riz séparément pour qu'il reste souple, puis étale-le dans le fond du bol en une couche régulière.",
+      "Coupe le concombre, les tomates et l'avocat en morceaux nets, puis répartis-les en zones distinctes sur le riz.",
+      "Ajoute le poulet émincé, arrose de jus de citron et termine avec une pincée de sel ou d'herbes fraîches."
+    ],
     tags: ["high-protein", "post-workout", "batch-cooking"],
     moment: "déjeuner post-séance",
     substitutions: ["Dinde ou tofu ferme à la place du poulet.", "Quinoa si tu veux varier le riz."]
@@ -78,8 +106,15 @@ export const RECIPES = [
     fats: 18,
     objectif: "seche",
     difficulte: "facile",
+    videoId: "OlEYbKKWWt8",
     ingredients: ["150 g poulet", "90 g quinoa cuit", "roquette", "tomates cerises", "concombre", "huile olive"],
-    steps: ["Cuire ou réchauffer quinoa et poulet.", "Couper les légumes.", "Assembler avec une vinaigrette simple."],
+    steps: [
+      "Si le quinoa est cru, rince-le avant cuisson puis cuis-le dans deux fois son volume d'eau jusqu'à absorption complète.",
+      "Poêle ou grille le poulet avec un assaisonnement simple, puis découpe-le en lanières après un court temps de repos.",
+      "Lave et sèche bien la roquette pour éviter de diluer la vinaigrette au fond du saladier.",
+      "Coupe les tomates cerises en deux et le concombre en demi-rondelles fines pour mieux répartir le volume de légumes.",
+      "Assemble le quinoa froid ou tiède, la roquette, les légumes et le poulet, puis termine avec un filet d'huile d'olive et du citron."
+    ],
     tags: ["high-protein", "sans-gluten", "batch-cooking"],
     moment: "déjeuner léger",
     substitutions: ["Poulet remplacé par tempeh mariné.", "Roquette remplacée par jeunes pousses."]
@@ -95,8 +130,15 @@ export const RECIPES = [
     fats: 21,
     objectif: "maintenance",
     difficulte: "facile",
+    videoId: "RLa6Hs-KX0g",
     ingredients: ["1 wrap complet", "1 boîte de thon", "1/2 avocat", "yaourt grec", "salade", "citron"],
-    steps: ["Émiette le thon.", "Mélange avec avocat, yaourt et citron.", "Roulez avec la salade dans le wrap."],
+    steps: [
+      "Égoutte soigneusement le thon pour éviter qu'il ne détrempe la galette, puis émiette-le dans un bol.",
+      "Écrase l'avocat à la fourchette avec le yaourt grec et quelques gouttes de citron pour créer une garniture crémeuse.",
+      "Mélange la crème avocat-yaourt avec le thon jusqu'à obtenir une farce homogène, assaisonnée mais encore texturée.",
+      "Réchauffe très légèrement le wrap 10 à 15 secondes pour qu'il roule sans casser.",
+      "Dépose la salade au centre, ajoute la farce, rabats les côtés puis roule fermement avant de couper en biais."
+    ],
     tags: ["speed", "high-protein", "post-workout"],
     moment: "déjeuner rapide",
     substitutions: ["Wrap maïs pour sans gluten.", "Tofu émietté pour version végé."]
@@ -112,8 +154,15 @@ export const RECIPES = [
     fats: 19,
     objectif: "masse",
     difficulte: "moyen",
+    videoId: "kslBNZSfzcI",
     ingredients: ["120 g pâtes protéinées", "150 g boeuf maigre", "passata", "courgette", "parmesan léger"],
-    steps: ["Cuire les pâtes.", "Faire revenir boeuf et courgette.", "Ajouter la sauce et mélanger avec les pâtes."],
+    steps: [
+      "Lance la cuisson des pâtes dans une grande casserole d'eau bouillante salée en suivant le temps indiqué pour garder une texture al dente.",
+      "Pendant ce temps, fais revenir le boeuf émietté dans une poêle chaude jusqu'à coloration uniforme, puis retire l'excès de jus si besoin.",
+      "Ajoute la courgette coupée en petits dés et cuis encore 3 à 4 minutes pour la garder légèrement ferme.",
+      "Verse la passata, baisse le feu et laisse mijoter quelques minutes pour lier la sauce à la viande.",
+      "Égoutte les pâtes, mélange-les immédiatement à la sauce, puis termine avec le parmesan au moment du service."
+    ],
     tags: ["high-protein", "post-workout", "batch-cooking"],
     moment: "dîner après séance lourde",
     substitutions: ["Poulet haché à la place du boeuf.", "Levure maltée à la place du parmesan."]
@@ -129,8 +178,15 @@ export const RECIPES = [
     fats: 22,
     objectif: "maintenance",
     difficulte: "facile",
+    videoId: "ZYS9PTZ6iEs",
     ingredients: ["150 g poulet effiloché", "3 tortillas maïs", "haricots noirs", "salsa", "yaourt grec", "salade"],
-    steps: ["Réchauffe le poulet et les haricots.", "Garnis les tortillas.", "Ajoute la salsa, la salade et le yaourt."],
+    steps: [
+      "Réchauffe le poulet effiloché avec un peu d'eau ou de bouillon pour lui redonner du moelleux sans le dessécher.",
+      "Fais tiédir les haricots noirs séparément et écrase-en une petite partie pour obtenir une garniture plus stable dans la tortilla.",
+      "Passe les tortillas à sec dans une poêle chaude 20 secondes par face pour les assouplir et développer le goût.",
+      "Étale une base de haricots, ajoute le poulet, puis la salade pour apporter du volume sans alourdir.",
+      "Termine avec la salsa et une cuillère de yaourt grec juste avant de servir pour garder les tacos nets."
+    ],
     tags: ["high-protein", "speed", "sans-gluten"],
     moment: "dîner convivial ou post-workout",
     substitutions: ["Tofu fumé ou émincé de soja pour version vegan.", "Tortillas blé si tu préfères."]
@@ -146,8 +202,15 @@ export const RECIPES = [
     fats: 24,
     objectif: "seche",
     difficulte: "facile",
+    videoId: "rokppL8pq-4",
     ingredients: ["3 oeufs", "80 g blancs d'oeufs", "30 g fromage léger", "champignons", "épinards"],
-    steps: ["Fais revenir les légumes.", "Ajoute les oeufs battus.", "Termine avec le fromage et plie l'omelette."],
+    steps: [
+      "Coupe les champignons en lamelles et fais-les revenir à feu moyen jusqu'à évaporation de leur eau.",
+      "Ajoute les épinards une minute en fin de cuisson pour juste les faire tomber sans les noircir.",
+      "Bats les oeufs et les blancs dans un bol distinct avec une pincée de sel pour obtenir une texture plus homogène.",
+      "Verse les oeufs dans la poêle, baisse légèrement le feu et pousse les bords pris vers le centre avec une spatule.",
+      "Ajoute le fromage quand l'omelette est presque prise, replie-la délicatement et laisse finir hors du feu."
+    ],
     tags: ["high-protein", "sans-gluten", "speed"],
     moment: "dîner léger",
     substitutions: ["Tofu soyeux + farine de pois chiche pour version vegan.", "Comté allégé ou feta légère."]
@@ -163,8 +226,15 @@ export const RECIPES = [
     fats: 24,
     objectif: "maintenance",
     difficulte: "moyen",
+    videoId: "DCvIBlFmujY",
     ingredients: ["160 g boeuf maigre", "haricots rouges", "tomates concassées", "poivron", "oignon", "épices"],
-    steps: ["Fais revenir oignon, poivron et boeuf.", "Ajoute tomates, haricots et épices.", "Laisse mijoter 15 min."],
+    steps: [
+      "Émince l'oignon et le poivron en petits dés pour qu'ils cuisent au même rythme que la viande.",
+      "Fais revenir l'oignon 2 minutes, ajoute le poivron, puis le boeuf maigre en l'émiettant jusqu'à disparition des gros morceaux.",
+      "Assaisonne avec cumin, paprika et piment avant d'ajouter les tomates concassées afin de torréfier légèrement les épices.",
+      "Verse les haricots rincés, mélange bien et laisse mijoter à feu doux 15 minutes pour concentrer la sauce.",
+      "Goûte, rectifie l'assaisonnement, puis laisse reposer 2 minutes hors du feu avant de servir."
+    ],
     tags: ["high-protein", "batch-cooking", "budget"],
     moment: "dîner ou meal-prep",
     substitutions: ["Dinde hachée à la place du boeuf.", "Haricots noirs pour varier."]
@@ -180,8 +250,15 @@ export const RECIPES = [
     fats: 16,
     objectif: "maintenance",
     difficulte: "facile",
+    videoId: "j6LxD-clPXo",
     ingredients: ["haricots rouges", "haricots noirs", "maïs", "tomates concassées", "poivron", "oignon"],
-    steps: ["Fais revenir les légumes.", "Ajoute les légumineuses et la tomate.", "Laisse mijoter 15 à 20 min."],
+    steps: [
+      "Émince l'oignon et coupe le poivron en petits cubes pour accélérer la cuisson et répartir le goût.",
+      "Fais suer l'oignon avec un peu d'huile, puis ajoute le poivron et cuis 3 minutes jusqu'à légère tendreté.",
+      "Ajoute les tomates concassées, le maïs et les haricots rincés, puis mélange avec les épices pour bien les enrober.",
+      "Laisse mijoter 15 à 20 minutes à feu moyen-doux en remuant de temps en temps pour éviter que le fond accroche.",
+      "Si tu veux une texture plus épaisse, écrase une petite louche de haricots dans la casserole avant de servir."
+    ],
     tags: ["vegan", "vege", "sans-lactose", "batch-cooking", "budget", "sans-gluten"],
     moment: "dîner végétal ou lunch batch-cooking",
     substitutions: ["Ajoute du tofu émietté pour plus de protéines.", "Servir avec riz ou patate douce."]
@@ -197,8 +274,15 @@ export const RECIPES = [
     fats: 14,
     objectif: "maintenance",
     difficulte: "facile",
+    videoId: "4rzvMUzEP_U",
     ingredients: ["lentilles corail", "lait coco léger", "curry", "épinards", "riz basmati"],
-    steps: ["Cuire les lentilles avec les épices.", "Ajoute le lait coco et les épinards.", "Sers avec du riz."],
+    steps: [
+      "Rince rapidement les lentilles corail sous l'eau froide pour retirer l'excès d'amidon de surface.",
+      "Lance le riz basmati dans une casserole séparée afin qu'il soit prêt au moment où le curry épaissit.",
+      "Fais revenir les épices 30 secondes dans un fond d'huile, ajoute les lentilles puis couvre d'eau ou de bouillon.",
+      "Quand les lentilles commencent à s'écraser, verse le lait de coco et mélange jusqu'à obtention d'une sauce onctueuse.",
+      "Ajoute les épinards à la fin pour juste les attendrir, puis sers immédiatement avec le riz égoutté."
+    ],
     tags: ["vege", "sans-gluten", "batch-cooking"],
     moment: "dîner réconfort",
     substitutions: ["Pois chiches à la place des lentilles.", "Riz complet ou quinoa."]
@@ -214,8 +298,15 @@ export const RECIPES = [
     fats: 18,
     objectif: "maintenance",
     difficulte: "facile",
+    videoId: "5AyYBQohqvY",
     ingredients: ["pois chiches", "tomates", "lait coco", "oignon", "ail", "épinards"],
-    steps: ["Fais revenir ail et oignon.", "Ajoute pois chiches, tomates et lait coco.", "Laisse mijoter puis ajoute les épinards."],
+    steps: [
+      "Émince l'oignon finement et hache l'ail pour qu'ils fondent vite dans la sauce.",
+      "Fais revenir l'oignon 2 à 3 minutes, ajoute l'ail et les épices, puis mélange jusqu'à sentir le parfum du curry.",
+      "Verse les tomates et les pois chiches rincés, puis laisse cuire quelques minutes pour que les saveurs se concentrent.",
+      "Ajoute le lait de coco et laisse frémir doucement jusqu'à obtenir une sauce nappante mais encore fluide.",
+      "Incorpore les épinards en toute fin, remue juste assez pour les attendrir et sers bien chaud."
+    ],
     tags: ["vegan", "vege", "sans-lactose", "sans-gluten", "speed"],
     moment: "dîner végétal rapide",
     substitutions: ["Lentilles à la place des pois chiches.", "Yaourt soja pour adoucir."]
@@ -231,8 +322,15 @@ export const RECIPES = [
     fats: 20,
     objectif: "maintenance",
     difficulte: "facile",
+    videoId: "X8kQPDeqoaw",
     ingredients: ["180 g tofu ferme", "riz", "brocoli", "carotte", "sauce soja", "gingembre"],
-    steps: ["Fais dorer le tofu.", "Ajoute les légumes et la sauce.", "Sers avec du riz chaud."],
+    steps: [
+      "Presse le tofu quelques minutes dans un torchon propre pour retirer l'excès d'eau et obtenir une meilleure coloration.",
+      "Coupe-le en cubes réguliers, puis saisis-les dans une poêle chaude jusqu'à ce que chaque face commence à dorer.",
+      "Ajoute la carotte en fins bâtonnets et le brocoli en petits bouquets pour qu'ils cuisent vite tout en restant croquants.",
+      "Mélange sauce soja et gingembre râpé, verse sur l'ensemble et enrobe pendant 1 à 2 minutes sans trop charger la poêle en liquide.",
+      "Sers le sauté sur du riz chaud et mélange au dernier moment pour garder le contraste de textures."
+    ],
     tags: ["vegan", "vege", "sans-lactose", "high-protein", "speed"],
     moment: "dîner ou déjeuner végétal",
     substitutions: ["Tempeh si tu veux plus de mâche.", "Nouilles de riz à la place du riz."]
@@ -248,8 +346,15 @@ export const RECIPES = [
     fats: 8,
     objectif: "maintenance",
     difficulte: "facile",
+    videoId: "dj2AWu4wwi4",
     ingredients: ["1 skyr", "1 banane", "10 g beurre cacahuète", "cannelle"],
-    steps: ["Assemble dans un bol.", "Mange dans les 30 à 60 min après la séance."],
+    steps: [
+      "Verse le skyr dans un bol et détends-le rapidement à la cuillère pour qu'il soit plus agréable à manger juste après l'effort.",
+      "Coupe la banane en rondelles assez fines pour mieux la répartir et faciliter la digestion.",
+      "Ajoute le beurre de cacahuète en petites touches plutôt qu'en un gros bloc pour qu'il se mélange plus facilement à chaque bouchée.",
+      "Saupoudre de cannelle au-dessus pour apporter du goût sans rajouter de sucre.",
+      "Mange dans les 30 à 60 minutes après la séance, idéalement avec un verre d'eau."
+    ],
     tags: ["post-workout", "speed", "high-protein"],
     moment: "juste après l'entraînement",
     substitutions: ["Yaourt soja + protéine végétale pour sans lactose.", "Compote sans sucre si tu n'as pas de banane."]
@@ -265,8 +370,15 @@ export const RECIPES = [
     fats: 15,
     objectif: "maintenance",
     difficulte: "facile",
+    videoId: "WJhZk6XCnTA",
     ingredients: ["oeufs", "thon", "riz", "petits pois", "oignon"],
-    steps: ["Cuire le riz.", "Faire revenir l'oignon et les petits pois.", "Ajouter les oeufs puis le thon émietté."],
+    steps: [
+      "Fais cuire le riz à l'avance ou réchauffe un reste bien froid pour éviter qu'il ne colle à la poêle.",
+      "Émince l'oignon finement, puis fais-le revenir jusqu'à légère coloration avant d'ajouter les petits pois.",
+      "Pousse les légumes sur un côté de la poêle et verse les oeufs battus de l'autre côté pour les brouiller séparément.",
+      "Ajoute le thon émietté et le riz, puis mélange l'ensemble seulement quand les oeufs sont juste cuits.",
+      "Rectifie avec poivre, paprika ou citron pour relever le plat sans augmenter le coût."
+    ],
     tags: ["budget", "high-protein", "batch-cooking", "speed"],
     moment: "déjeuner économique",
     substitutions: ["Maquereau ou sardines à la place du thon.", "Lentilles si tu veux une option sans poisson."]
@@ -282,8 +394,15 @@ export const RECIPES = [
     fats: 9,
     objectif: "masse",
     difficulte: "facile",
+    videoId: "RS-nrbwkfUI",
     ingredients: ["1 dose whey", "250 ml lait", "1 banane", "150 g skyr", "glaçons"],
-    steps: ["Mixe tous les ingrédients 30 secondes.", "Bois frais."],
+    steps: [
+      "Verse d'abord le lait dans le blender pour aider les poudres à se mixer sans coller aux lames.",
+      "Ajoute la whey, le skyr et la banane coupée en morceaux pour obtenir un mélange plus rapide et plus homogène.",
+      "Complète avec quelques glaçons pour rafraîchir la boisson et épaissir légèrement la texture.",
+      "Mixe 20 à 30 secondes, arrête, racle les bords si nécessaire, puis relance quelques secondes pour lisser complètement.",
+      "Verse dans un grand verre et consomme aussitôt pour garder la texture mousseuse."
+    ],
     tags: ["high-protein", "post-workout", "speed"],
     moment: "collation ou après une séance lourde",
     substitutions: ["Boisson amande + protéine végétale pour sans lactose.", "Avoine fine pour épaissir et monter les glucides."]

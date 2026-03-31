@@ -38,6 +38,8 @@
   --gap: 8px;
   --nav-height: 68px;
   --app-height: 100dvh;
+  --viewport-height: 100dvh;
+  --keyboard-offset: 0px;
 }
 
 * {
@@ -56,6 +58,7 @@ body {
   min-height: 100%;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  overflow-x: hidden;
 }
 
 body {
@@ -68,6 +71,7 @@ body {
   overflow: hidden;
   min-height: 100svh;
   min-height: 100dvh;
+  overscroll-behavior-y: none;
 }
 
 body::before {
@@ -105,8 +109,8 @@ textarea {
   flex-direction: column;
   height: var(--app-height);
   min-height: 100svh;
-  width: 100%;
-  max-width: min(460px, 100vw);
+  width: min(100%, 520px);
+  max-width: 100%;
   margin: 0 auto;
   border-left: 1px solid rgba(255, 226, 188, 0.08);
   border-right: 1px solid rgba(255, 226, 188, 0.08);
@@ -204,9 +208,10 @@ textarea {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 8px;
-  padding-bottom: 16px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
+  scroll-padding-bottom: calc(180px + env(safe-area-inset-bottom));
 }
 
 .page {
@@ -271,6 +276,16 @@ textarea {
 .card h4 {
   font-size: 0.82rem;
   margin-bottom: 5px;
+}
+
+.card,
+.btn,
+.pill,
+.ghost-link,
+.control-chip,
+.helper-note,
+.muted {
+  overflow-wrap: anywhere;
 }
 
 .muted {
@@ -1934,6 +1949,11 @@ textarea:focus {
   align-items: center;
 }
 
+html.keyboard-open .auth-screen {
+  align-items: start;
+  padding-top: 24px;
+}
+
 .auth-shell {
   width: min(100%, 460px);
   margin: 0 auto;
@@ -2473,6 +2493,8 @@ summary {
 
 .history-entry-card {
   gap: 12px;
+  content-visibility: auto;
+  contain-intrinsic-size: 220px;
 }
 
 .history-entry-grid {
@@ -2655,10 +2677,9 @@ summary {
 
 .nav-btn span:last-child {
   max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1;
+  white-space: normal;
+  text-wrap: balance;
+  line-height: 1.12;
 }
 
 .nav-glyph {
@@ -3215,6 +3236,14 @@ summary {
   border: 1px solid rgba(255, 230, 198, 0.08);
 }
 
+.photo-media-button {
+  appearance: none;
+  border: none;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+}
+
 .progress-photo-preview img,
 .progress-photo-media img {
   display: block;
@@ -3228,11 +3257,20 @@ summary {
   grid-template-columns: 112px 1fr;
   gap: 12px;
   align-items: start;
+  content-visibility: auto;
+  contain-intrinsic-size: 196px;
 }
 
 .progress-photo-media {
   border-radius: 16px;
   overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.photo-media-button:hover,
+.photo-media-button:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.26);
 }
 
 .progress-photo-copy {
@@ -3454,12 +3492,16 @@ summary {
   padding-bottom: calc(148px + env(safe-area-inset-bottom));
 }
 
+html.keyboard-open .container {
+  padding-bottom: calc(32px + env(safe-area-inset-bottom));
+}
+
 .quick-nav {
   position: fixed;
   left: 50%;
   bottom: calc(8px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
-  width: min(420px, calc(100% - 14px));
+  width: min(500px, calc(100% - 14px));
   padding: 0 8px;
   z-index: 22;
   pointer-events: none;
@@ -3512,6 +3554,13 @@ summary {
 .quick-nav-btn span {
   display: block;
   line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+html.keyboard-open .quick-nav {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) translateY(12px);
 }
 
 .quick-nav-btn:hover,
@@ -3734,8 +3783,71 @@ summary {
   background: rgba(255, 255, 255, 0.035);
 }
 
+.admin-user-card {
+  content-visibility: auto;
+  contain-intrinsic-size: 120px;
+}
+
 .admin-screen .native-block-head {
   align-items: center;
+}
+
+.admin-panel-card {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-section-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-section-chip {
+  min-width: 0;
+  border: 1px solid rgba(255, 230, 198, 0.1);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #f6e7d3;
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 0.76rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.admin-section-chip.active {
+  border-color: rgba(244, 197, 55, 0.3);
+  background: linear-gradient(145deg, rgba(244, 197, 55, 0.2), rgba(255, 226, 125, 0.08));
+  color: #fff5de;
+  box-shadow: 0 12px 22px rgba(96, 58, 0, 0.14);
+}
+
+.admin-filter-grid {
+  align-items: end;
+}
+
+.admin-activity-list,
+.admin-text-list,
+.admin-stat-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-activity-card,
+.admin-stat-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 230, 198, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.admin-stats-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .admin-screen .progress-photo-card {
@@ -3766,6 +3878,70 @@ summary {
 
 .admin-detail-actions {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-delete-sheet,
+.photo-viewer-sheet {
+  gap: 14px;
+}
+
+.photo-viewer-backdrop {
+  z-index: 41;
+}
+
+.photo-viewer-sheet {
+  z-index: 42;
+}
+
+.photo-viewer-media {
+  border-radius: 22px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 230, 198, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.photo-viewer-media img {
+  display: block;
+  width: 100%;
+  max-height: min(62vh, 560px);
+  object-fit: contain;
+  background: #0a0a0a;
+}
+
+.photo-viewer-section,
+.photo-viewer-note-card {
+  display: grid;
+  gap: 10px;
+}
+
+.photo-viewer-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-soft);
+  font-size: 0.8rem;
+}
+
+.photo-viewer-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.photo-viewer-note-card {
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 230, 198, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.photo-viewer-summary-card {
+  background: linear-gradient(170deg, rgba(25, 22, 18, 0.96), rgba(13, 13, 13, 0.98));
+}
+
+.photo-viewer-empty .empty {
+  min-height: auto;
+  padding: 14px;
 }
 
 .home-day-grid,
@@ -4429,7 +4605,7 @@ summary {
   left: 50%;
   bottom: 0;
   transform: translateX(-50%);
-  width: min(460px, 100vw);
+  width: min(520px, calc(100vw - 8px));
   padding: 10px 10px calc(14px + env(safe-area-inset-bottom));
   border-radius: 22px 22px 0 0;
   background: linear-gradient(180deg, rgba(20, 20, 20, 0.98), rgba(9, 9, 9, 0.99));
@@ -4526,6 +4702,10 @@ summary {
 
 .recipe-compact-card {
   gap: 10px;
+}
+
+.recipe-detail-grid {
+  grid-template-columns: 1fr;
 }
 
 .recipe-tag-row {
@@ -4991,7 +5171,9 @@ summary {
   .custom-session-summary-top,
   .custom-block-summary,
   .custom-search-result,
-  .admin-user-card {
+  .admin-user-card,
+  .admin-section-grid,
+  .admin-stats-grid {
     grid-template-columns: 1fr;
   }
 

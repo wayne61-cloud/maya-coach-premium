@@ -72,7 +72,7 @@ const steps = [
 ];
 
 export function renderOnboarding(node) {
-  if (state.page === "auth" || !state.currentUser) {
+  if (state.page === "auth" || !state.currentUser || state.profile?.role === "admin") {
     node.classList.remove("active");
     node.innerHTML = "";
     return;

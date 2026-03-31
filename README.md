@@ -59,3 +59,15 @@ If you prefer Supabase later, keep using:
 - `services.supabase.anonKey`
 
 Then run [`supabase/schema.sql`](./supabase/schema.sql) in your Supabase SQL editor so the moderation statuses, RLS policies and storage rules stay aligned with the app.
+
+Important for security in Supabase mode:
+
+- admin rights must come from the database profile row, not from the public app config,
+- new signups stay regular users by default,
+- promote an admin explicitly from the Supabase SQL editor after the account exists:
+
+```sql
+update public.profiles
+set role = 'admin', account_status = 'active', updated_at = now()
+where email = 'admin@maya.fitness';
+```

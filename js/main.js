@@ -26,7 +26,7 @@ import {
 } from "./supabase.js";
 import { pullSyncSnapshot, pushSyncSnapshot, scheduleAutoSync } from "./sync.js";
 import { defaultCustomWorkoutDraft, defaultProfile, persistFavorites, persistVisualProgressEntries, resetPhotoProgressDraft, state, updateProfile } from "./state.js";
-import { readErrorMessage } from "./utils.js";
+import { dayKey, readErrorMessage } from "./utils.js";
 import { APP_VERSION } from "./version.js";
 import { appendExerciseToCustomWorkout, applyFeedback, buildAdjustedPlan, buildCustomPlanFromDraft, buildCustomWorkoutCoachAlerts, buildNoushiChallengePlan, createCustomWorkoutSession, createProtocolHistoryEntry, finishWorkout, historyEntryToPlan, removeCustomWorkoutSession, resetCustomWorkoutDraft, setActiveCustomWorkoutSession, setCustomWorkoutDraft, startPlan, workoutDoneAction, workoutModifyAction, workoutSkipAction } from "./workout.js";
 
@@ -44,15 +44,57 @@ function updateClock() {
   document.getElementById("headerClock").textContent = now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 }
 
-function syncViewportHeight() {
-  const viewportHeight = window.visualViewport?.height || window.innerHeight;
-  document.documentElement.style.setProperty("--app-height", `${Math.round(viewportHeight)}px`);
+function isTextEditingElement(element = document.activeElement) {
+  if (!(element instanceof HTMLElement)) return false;
+  if (element instanceof HTMLTextAreaElement) return true;
+  if (element instanceof HTMLInputElement) {
+    const blockedTypes = new Set(["button", "checkbox", "color", "file", "hidden", "radio", "range", "reset", "submit"]);
+    return !blockedTypes.has(element.type);
+  }
+  return element.isContentEditable;
+}
+
+function syncViewportHeight({ force = false } = {}) {
+  const innerHeight = window.innerHeight || 0;
+  const visualHeight = window.visualViewport?.height || innerHeight;
+  const previousBaseline = syncViewportHeight.baselineHeight || innerHeight;
+
+  if (force || !syncViewportHeight.baselineHeight || innerHeight > previousBaseline + 40) {
+    syncViewportHeight.baselineHeight = innerHeight;
+  }
+
+  const baselineHeight = syncViewportHeight.baselineHeight || innerHeight;
+  const keyboardOpen = isTextEditingElement() && visualHeight < baselineHeight - 110;
+  const appHeight = keyboardOpen ? baselineHeight : Math.max(innerHeight, visualHeight, baselineHeight);
+
+  document.documentElement.style.setProperty("--app-height", `${Math.round(appHeight)}px`);
+  document.documentElement.style.setProperty("--viewport-height", `${Math.round(visualHeight)}px`);
+  document.documentElement.style.setProperty("--keyboard-offset", `${Math.max(0, Math.round(baselineHeight - visualHeight))}px`);
+  document.documentElement.classList.toggle("keyboard-open", keyboardOpen);
+
+  if (keyboardOpen && isTextEditingElement()) {
+    window.setTimeout(() => {
+      document.activeElement?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    }, 60);
+  }
 }
 
 function syncBuildLabel() {
   document.querySelectorAll("[data-build-label]").forEach((node) => {
     node.textContent = APP_VERSION;
   });
+}
+
+function scheduleDeferredRefresh(key = "page", delayMs = 120) {
+  clearTimeout(scheduleDeferredRefresh.timers?.get(key));
+  if (!scheduleDeferredRefresh.timers) {
+    scheduleDeferredRefresh.timers = new Map();
+  }
+  const timeoutId = window.setTimeout(() => {
+    scheduleDeferredRefresh.timers.delete(key);
+    refreshCurrentPage();
+  }, delayMs);
+  scheduleDeferredRefresh.timers.set(key, timeoutId);
 }
 
 function toggleFavorite(type, id) {
@@ -112,15 +154,19 @@ function readFileAsDataUrl(file) {
   });
 }
 
-async function buildProfilePhotoDataUrl(file) {
-  if (!file) return "";
-  const source = await readFileAsDataUrl(file);
-  const image = await new Promise((resolve, reject) => {
+async function loadImageFromSource(source) {
+  return new Promise((resolve, reject) => {
     const nextImage = new Image();
     nextImage.onload = () => resolve(nextImage);
     nextImage.onerror = () => reject(new Error("Impossible de charger la photo"));
     nextImage.src = source;
   });
+}
+
+async function buildProfilePhotoDataUrl(file) {
+  if (!file) return "";
+  const source = await readFileAsDataUrl(file);
+  const image = await loadImageFromSource(source);
   const size = 240;
   const canvas = document.createElement("canvas");
   canvas.width = size;
@@ -136,6 +182,25 @@ async function buildProfilePhotoDataUrl(file) {
   ctx.fillRect(0, 0, size, size);
   ctx.drawImage(image, x, y, width, height);
   return canvas.toDataURL("image/jpeg", 0.82);
+}
+
+async function buildProgressPhotoDataUrl(file) {
+  if (!file) return "";
+  const source = await readFileAsDataUrl(file);
+  const image = await loadImageFromSource(source);
+  const maxSide = 1280;
+  const scale = Math.min(1, maxSide / Math.max(image.width || maxSide, image.height || maxSide));
+  const width = Math.max(1, Math.round((image.width || maxSide) * scale));
+  const height = Math.max(1, Math.round((image.height || maxSide) * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return source;
+  ctx.fillStyle = "#0d0d0d";
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(image, 0, 0, width, height);
+  return canvas.toDataURL("image/jpeg", 0.84);
 }
 
 async function resolveProfilePhotoForSave() {
@@ -587,6 +652,143 @@ async function saveProgressPhoto() {
   showToast("Photo ajoutée à la frise");
 }
 
+function closePhotoViewer() {
+  state.photoViewer = {
+    open: false,
+    source: "progress",
+    sourceId: "",
+    imageUrl: "",
+    date: "",
+    zone: "",
+    context: "",
+    note: "",
+    weightKg: "",
+    heightCm: "",
+    ownerName: "",
+    ownerEmail: "",
+    sessions: [],
+    dayNotes: []
+  };
+}
+
+function buildDaySessionsForPhoto(date) {
+  const key = dayKey(date);
+  if (!key) return [];
+
+  return (state.history || [])
+    .filter((entry) => dayKey(entry.date) === key)
+    .sort((left, right) => new Date(right.date || 0).getTime() - new Date(left.date || 0).getTime())
+    .map((entry) => {
+      const isTraining = entry.type === "training";
+      const duration = entry.durationRealMin || entry.durationMin || 0;
+      const meta = [
+        isTraining ? "séance" : entry.type || "activité",
+        duration ? `${duration} min` : "",
+        entry.objective || "",
+        entry.zone || ""
+      ].filter(Boolean).join(" • ");
+
+      const description = [
+        entry.coachNote || "",
+        entry.feedback ? `feedback ${entry.feedback}` : "",
+        Array.isArray(entry.exercises) && entry.exercises.length ? `${entry.exercises.length} exercice(s)` : ""
+      ].filter(Boolean).join(" • ");
+
+      return {
+        id: entry.id,
+        title: entry.title || (isTraining ? "Séance" : "Activité"),
+        meta,
+        description
+      };
+    });
+}
+
+function buildAdminDayNotesForPhoto(photo) {
+  const key = dayKey(photo?.date || photo?.createdAt || "");
+  if (!key) return [];
+
+  return (state.adminRuntime?.detailNotes || [])
+    .filter((note) => note.id !== `photo:${photo.id}` && dayKey(note.date || "") === key)
+    .map((note) => ({
+      id: note.id,
+      title: note.title || "Repère",
+      meta: note.kind || "note",
+      context: note.context || "",
+      description: note.description || ""
+    }));
+}
+
+function openPhotoViewer(source, id) {
+  if (source === "admin") {
+    const photo = (state.adminRuntime?.detailPhotos || []).find((item) => item.id === id);
+    if (!photo) return;
+    state.photoViewer = {
+      open: true,
+      source: "admin",
+      sourceId: photo.id,
+      imageUrl: photo.photoDataUrl || "",
+      date: photo.date || photo.createdAt || "",
+      zone: photo.zone || "",
+      context: photo.context || "",
+      note: photo.note || "",
+      weightKg: photo.weightKg || "",
+      heightCm: photo.heightCm || "",
+      ownerName: photo.userName || state.adminRuntime?.detailUser?.name || "",
+      ownerEmail: photo.userEmail || state.adminRuntime?.detailUser?.email || "",
+      sessions: [],
+      dayNotes: buildAdminDayNotesForPhoto(photo)
+    };
+    refreshCurrentPage();
+    return;
+  }
+
+  const photo = (state.visualProgressEntries || []).find((item) => item.id === id);
+  if (!photo) return;
+  state.photoViewer = {
+    open: true,
+    source: "progress",
+    sourceId: photo.id,
+    imageUrl: photo.photoDataUrl || "",
+    date: photo.date || "",
+    zone: photo.zone || "",
+    context: photo.context || "",
+    note: photo.note || "",
+    weightKg: photo.weightKg || "",
+    heightCm: photo.heightCm || "",
+    ownerName: "",
+    ownerEmail: "",
+    sessions: buildDaySessionsForPhoto(photo.date),
+    dayNotes: []
+  };
+  refreshCurrentPage();
+}
+
+function openAdminDeleteDialog(profileId, profileName = "") {
+  state.adminRuntime = {
+    ...(state.adminRuntime || {}),
+    deleteDialogOpen: true,
+    deleteTargetId: profileId || "",
+    deleteTargetName: profileName || "",
+    deleteReason: "",
+    deleteError: "",
+    deleteSubmitting: false
+  };
+  refreshCurrentPage();
+}
+
+function closeAdminDeleteDialog() {
+  state.adminRuntime = {
+    ...(state.adminRuntime || {}),
+    deleteDialogOpen: false,
+    deleteTargetId: "",
+    deleteTargetName: "",
+    deleteReason: "",
+    deleteError: "",
+    deleteSubmitting: false
+  };
+  refreshCurrentPage();
+}
+
 async function handleAdminRefresh() {
   await refreshAdminDashboard();
   refreshCurrentPage();
@@ -720,6 +922,13 @@ async function routeAction(action, target) {
       return;
     case "save-progress-photo":
       await saveProgressPhoto();
+      return;
+    case "open-photo-viewer":
+      openPhotoViewer(target.dataset.source || "progress", target.dataset.id || "");
+      return;
+    case "close-photo-viewer":
+      closePhotoViewer();
+      refreshCurrentPage();
       return;
     case "sync-flowise-widget": {
       const result = await syncFlowiseWidget();
@@ -862,12 +1071,22 @@ async function routeAction(action, target) {
       await handleAdminRefresh();
       showToast("Dashboard admin actualisé");
       return;
+    case "admin-set-section":
+      state.adminRuntime = {
+        ...(state.adminRuntime || {}),
+        section: target.dataset.section || "profiles"
+      };
+      refreshCurrentPage();
+      return;
     case "admin-open-user":
       await openAdminUserDetail(target.dataset.id, target.dataset.tab || "photos");
       refreshCurrentPage();
       return;
     case "admin-close-user":
       closeAdminUserDetail();
+      if (state.photoViewer?.source === "admin") {
+        closePhotoViewer();
+      }
       refreshCurrentPage();
       return;
     case "admin-detail-tab":
@@ -895,6 +1114,12 @@ async function routeAction(action, target) {
       showToast("Toutes les photos ont été supprimées");
       refreshCurrentPage();
       return;
+    case "admin-open-delete-account":
+      openAdminDeleteDialog(target.dataset.id || "", target.dataset.name || "");
+      return;
+    case "admin-close-delete-account":
+      closeAdminDeleteDialog();
+      return;
     case "admin-set-user-status": {
       const nextStatus = target.dataset.status || "active";
       const label = nextStatus === "pending"
@@ -910,12 +1135,38 @@ async function routeAction(action, target) {
       refreshCurrentPage();
       return;
     }
-    case "admin-delete-account": {
-      const reason = window.prompt("Raison de la suppression du compte", "");
-      if (!reason) return;
-      if (!window.confirm("Confirmer la suppression de ce compte et la purge de ses données dans l’app ?")) return;
-      await deleteAdminUserAccount(target.dataset.id, reason);
-      showToast("Compte supprimé");
+    case "admin-delete-account":
+      openAdminDeleteDialog(target.dataset.id || "", target.dataset.name || "");
+      return;
+    case "admin-confirm-delete-account": {
+      const reason = String(state.adminRuntime?.deleteReason || "").trim();
+      if (reason.length < 6) {
+        state.adminRuntime = {
+          ...(state.adminRuntime || {}),
+          deleteError: "Ajoute un motif clair d’au moins 6 caractères."
+        };
+        refreshCurrentPage();
+        return;
+      }
+      state.adminRuntime = {
+        ...(state.adminRuntime || {}),
+        deleteSubmitting: true,
+        deleteError: ""
+      };
+      refreshCurrentPage();
+      try {
+        await deleteAdminUserAccount(state.adminRuntime?.deleteTargetId, reason);
+        closeAdminDeleteDialog();
+        showToast("Compte supprimé");
+      } catch (error) {
+        state.adminRuntime = {
+          ...(state.adminRuntime || {}),
+          deleteSubmitting: false,
+          deleteError: readErrorMessage(error, "Impossible de supprimer ce compte.")
+        };
+        refreshCurrentPage();
+        return;
+      }
       refreshCurrentPage();
       return;
     }
@@ -1041,18 +1292,31 @@ function bindEvents() {
   document.getElementById("mainNav").addEventListener("click", async (event) => {
     const button = event.target.closest(".nav-btn");
     if (!button) return;
-    await navigateToPage(button.dataset.page);
+    try {
+      await navigateToPage(button.dataset.page);
+    } catch (error) {
+      showToast(readErrorMessage(error, "Navigation impossible"));
+    }
   });
   document.getElementById("quickNav").addEventListener("click", async (event) => {
     const button = event.target.closest(".quick-nav-btn");
     if (!button) return;
-    await navigateToPage(button.dataset.page);
+    try {
+      await navigateToPage(button.dataset.page);
+    } catch (error) {
+      showToast(readErrorMessage(error, "Navigation impossible"));
+    }
   });
 
   document.addEventListener("click", async (event) => {
     const target = event.target.closest("[data-action]");
     if (!target) return;
-    await routeAction(target.dataset.action, target);
+    try {
+      await routeAction(target.dataset.action, target);
+    } catch (error) {
+      showToast(readErrorMessage(error, "Action impossible"));
+      refreshCurrentPage();
+    }
   });
 
   document.addEventListener("input", (event) => {
@@ -1073,9 +1337,17 @@ function bindEvents() {
       };
       return;
     }
+    if (target.dataset?.adminDeleteField === "reason") {
+      state.adminRuntime = {
+        ...(state.adminRuntime || {}),
+        deleteReason: target.value,
+        deleteError: ""
+      };
+      return;
+    }
     if (target.id === "globalSearch") {
       state.globalSearch = target.value;
-      refreshCurrentPage();
+      scheduleDeferredRefresh("global-search");
     }
     if (target.id === "iaTime") state.aiDraft.time = target.value;
     if (target.id === "iaPlace") state.aiDraft.place = target.value;
@@ -1085,18 +1357,22 @@ function bindEvents() {
     if (target.id === "iaLevel") state.aiDraft.level = target.value;
     if (target.id === "exoSearch") {
       state.exoFilter.search = target.value;
-      refreshCurrentPage();
+      scheduleDeferredRefresh("exo-search");
     }
     if (target.id === "nutritionSearch") {
       state.nutritionFilter.search = target.value;
-      refreshCurrentPage();
+      scheduleDeferredRefresh("nutrition-search");
     }
     if (target.id === "customSessionSearch") {
       state.customWorkoutSearch = target.value;
-      refreshCurrentPage();
+      scheduleDeferredRefresh("custom-session-search");
     }
     if (target.dataset?.adminFilter === "filter") {
-      updateAdminFilter("filter", target.value);
+      state.adminRuntime = {
+        ...(state.adminRuntime || {}),
+        filter: target.value
+      };
+      scheduleDeferredRefresh("admin-filter");
       return;
     }
     if (target.dataset?.customWorkoutField) {
@@ -1206,7 +1482,7 @@ function bindEvents() {
       return;
     }
     if (target.id === "progressPhotoInput" && target instanceof HTMLInputElement && target.files?.length) {
-      buildProfilePhotoDataUrl(target.files[0])
+      buildProgressPhotoDataUrl(target.files[0])
         .then((nextPhoto) => {
           state.photoProgressDraft = {
             ...(state.photoProgressDraft || resetPhotoProgressDraft()),
@@ -1220,7 +1496,7 @@ function bindEvents() {
 }
 
 async function init() {
-  syncViewportHeight();
+  syncViewportHeight({ force: true });
   syncBuildLabel();
   updateClock();
   ensureLiteYouTubeEmbed().catch(() => {});
@@ -1236,8 +1512,13 @@ async function init() {
       reloadedForController = true;
       window.location.reload();
     });
-    window.addEventListener("resize", syncViewportHeight);
-    window.visualViewport?.addEventListener("resize", syncViewportHeight);
+    window.addEventListener("resize", () => syncViewportHeight({ force: true }));
+    window.visualViewport?.addEventListener("resize", () => syncViewportHeight());
+    window.visualViewport?.addEventListener("scroll", () => syncViewportHeight());
+    document.addEventListener("focusin", () => syncViewportHeight());
+    document.addEventListener("focusout", () => {
+      window.setTimeout(() => syncViewportHeight({ force: true }), 120);
+    });
     window.addEventListener("online", () => {
       if (state.currentUser && state.profile?.role !== "admin") {
         pullSyncSnapshot().catch(() => {});
@@ -1250,7 +1531,7 @@ async function init() {
     window.addEventListener("offline", refreshCurrentPage);
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) {
-        syncViewportHeight();
+        syncViewportHeight({ force: true });
         refreshNotificationPermission();
         notifyTopRecommendation(false).catch(() => {});
         if (state.currentUser && state.profile?.role !== "admin") {
