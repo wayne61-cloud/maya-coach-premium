@@ -1,11 +1,11 @@
-const CACHE_NAME = "maya-coach-shell-v8-20260331-1";
+const CACHE_NAME = "maya-coach-shell-v8-20260331-2";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./index.html?v=20260331-1",
-  "./styles.css?v=20260331-1",
-  "./manifest.webmanifest?v=20260331-1",
-  "./js/main.js?v=20260331-1"
+  "./index.html?v=20260331-2",
+  "./styles.css?v=20260331-2",
+  "./manifest.webmanifest?v=20260331-2",
+  "./js/main.js?v=20260331-2"
 ];
 
 function isSameOrigin(request) {
@@ -83,7 +83,7 @@ self.addEventListener("notificationclick", (event) => {
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
       const existing = windowClients[0];
       if (existing) return existing.focus();
-      return clients.openWindow("./index.html?v=20260331-1");
+      return clients.openWindow("./index.html?v=20260331-2");
     })
   );
 });

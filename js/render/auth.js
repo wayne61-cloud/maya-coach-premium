@@ -1,19 +1,6 @@
-import { APP_CONFIG, hasCloudProductConfig, hasFlowiseProductConfig, hasSupabaseProductConfig, isPreviewAuthEnabled } from "../app-config.js";
+import { hasCloudProductConfig, isPreviewAuthEnabled } from "../app-config.js";
 import { state } from "../state.js";
 import { escapeHtml } from "../utils.js";
-import { icon } from "../ui.js";
-
-function authModeLabel() {
-  if (hasSupabaseProductConfig()) return "Connexion sécurisée";
-  if (hasCloudProductConfig()) return "Backend sécurisé";
-  return isPreviewAuthEnabled() ? "Mode local" : "Configuration requise";
-}
-
-function authSessionLabel() {
-  if (state.authState.mode === "supabase") return "supabase";
-  if (state.authState.mode === "backend") return "backend";
-  return isPreviewAuthEnabled() ? "local" : "verrouillé";
-}
 
 function renderNotice() {
   if (state.authState.error) {
@@ -23,7 +10,7 @@ function renderNotice() {
     return `<div class="helper-note info-note">${escapeHtml(state.authState.notice)}</div>`;
   }
   if (hasCloudProductConfig()) {
-    return `<div class="helper-note calm-note">Compte personnel sécurisé, validation manuelle des inscriptions et synchronisation cloud continue avant d’entrer dans l’app.</div>`;
+    return "";
   }
   if (isPreviewAuthEnabled()) {
     return `<div class="helper-note info-note">Mode local réservé au développement sur cette machine tant que le backend produit n’est pas branché.</div>`;
@@ -36,43 +23,21 @@ export function renderAuth(node) {
   const draft = state.authDraft || {};
   const cloudReady = hasCloudProductConfig();
   const previewEnabled = isPreviewAuthEnabled();
-  const flowiseReady = hasFlowiseProductConfig();
   const isBusy = state.authState.status === "authenticating";
   const authDisabled = !cloudReady && !previewEnabled;
 
   node.innerHTML = `
     <div class="section auth-screen">
       <div class="auth-shell">
-        <div class="auth-hero auth-hero-poster">
-          <div class="eyebrow">Maya Fitness</div>
-          <h1>Connexion athlète</h1>
-          <p>Accès privé à ton espace d’entraînement, avec modération admin, données synchronisées et expérience plus nette dès la connexion.</p>
-
-          <div class="auth-hero-stack">
-            <div class="auth-stat-line">
-              <span>${icon("shield", "", 15)} ${escapeHtml(authModeLabel())}</span>
-              <strong>${cloudReady ? "Compte relié" : (previewEnabled ? "Local dev" : "Accès verrouillé")}</strong>
-            </div>
-            <div class="auth-stat-line">
-              <span>${icon("sync", "", 15)} Données</span>
-              <strong>${cloudReady ? "Cloud active" : (previewEnabled ? "Hors production" : "Non branché")}</strong>
-            </div>
-            <div class="auth-stat-line">
-              <span>${icon("coach", "", 15)} Maya Coach</span>
-              <strong>${flowiseReady ? "Widget prêt" : "Fallback intégré"}</strong>
-            </div>
+        <div class="auth-card auth-form-card auth-standalone-card">
+          <div class="auth-brand-lockup">
+            <h1>${isSignup ? "Créer un compte" : "Connexion"}</h1>
+            <p>${isSignup ? "Ton accès sera validé par l’administrateur." : "Entre tes identifiants pour ouvrir ton espace."}</p>
           </div>
-        </div>
 
-        <div class="auth-card auth-form-card">
           <div class="settings-tabs auth-tabs">
             <button class="settings-tab ${!isSignup ? "active" : ""}" data-action="auth-set-mode" data-mode="login">Connexion</button>
             <button class="settings-tab ${isSignup ? "active" : ""}" data-action="auth-set-mode" data-mode="signup">Créer un compte</button>
-          </div>
-
-          <div class="auth-form-head">
-            <strong>${isSignup ? "Créer ton espace" : "Reprendre ta session"}</strong>
-            <span>${cloudReady ? "Inscription modérée, données synchronisées et accès privé" : (previewEnabled ? "Mode local réservé au développement" : "Connexion réelle requise")}</span>
           </div>
 
           <div class="auth-form-grid">
@@ -109,15 +74,8 @@ export function renderAuth(node) {
           ${renderNotice()}
 
           <div class="actions-row two">
-            <button class="btn btn-main" data-action="auth-submit" ${(isBusy || authDisabled) ? "disabled" : ""}>${isBusy ? "Connexion..." : (authDisabled ? "Configuration requise" : (isSignup ? "Créer mon compte" : "Se connecter"))}</button>
+            <button class="btn btn-main" data-action="auth-submit" ${(isBusy || authDisabled) ? "disabled" : ""}>${isBusy ? (isSignup ? "Création..." : "Connexion...") : (authDisabled ? "Configuration requise" : (isSignup ? "Créer mon compte" : "Se connecter"))}</button>
             ${previewEnabled ? `<button class="btn btn-outline" data-action="auth-use-demo" ${isBusy ? "disabled" : ""}>Ouvrir le mode local</button>` : ""}
-          </div>
-        </div>
-
-        <div class="auth-footer-card auth-footer-minimal">
-          <div class="auth-footer-copy">
-            <strong>${icon("spark", "", 15)} ${escapeHtml(APP_CONFIG.product.name)}</strong>
-            <span>Session ${escapeHtml(authSessionLabel())} • accès privé, navigation allégée et rôle admin masqué hors connexion autorisée.</span>
           </div>
         </div>
       </div>
