@@ -1,8 +1,9 @@
 import { state } from "../state.js";
-import { buildEmptyState, escapeHtml, formatShortDate } from "../utils.js";
+import { buildEmptyState, dayKey, escapeHtml, formatShortDate } from "../utils.js";
 import { icon } from "../ui.js";
+import { renderPhotoViewer } from "./photo-viewer.js";
 
-function renderTimeline(entries) {
+function renderTimeline(entries, dayActivityCounts) {
   if (!entries.length) {
     return buildEmptyState(
       "Aucune photo enregistrée",
@@ -16,9 +17,9 @@ function renderTimeline(entries) {
     <div class="progress-photo-timeline">
       ${entries.map((entry) => `
         <article class="progress-photo-card">
-          <div class="progress-photo-media">
-            <img src="${entry.photoDataUrl}" alt="Progression ${escapeHtml(entry.zone)} du ${escapeHtml(formatShortDate(entry.date))}" />
-          </div>
+          <button class="progress-photo-media photo-media-button" type="button" data-action="open-photo-viewer" data-source="progress" data-id="${escapeHtml(entry.id)}" aria-label="Ouvrir la photo ${escapeHtml(entry.zone)} du ${escapeHtml(formatShortDate(entry.date))}">
+            <img src="${entry.photoDataUrl}" alt="Progression ${escapeHtml(entry.zone)} du ${escapeHtml(formatShortDate(entry.date))}" loading="lazy" decoding="async" />
+          </button>
           <div class="progress-photo-copy">
             <div class="progress-photo-head">
               <strong>${escapeHtml(entry.zone)}</strong>
@@ -28,8 +29,12 @@ function renderTimeline(entries) {
               ${entry.weightKg ? `<span class="pill">${escapeHtml(entry.weightKg)} kg</span>` : ""}
               ${entry.heightCm ? `<span class="pill">${escapeHtml(entry.heightCm)} cm</span>` : ""}
               ${entry.context ? `<span class="pill">${escapeHtml(entry.context)}</span>` : ""}
+              ${(dayActivityCounts.get(dayKey(entry.date)) || 0) ? `<span class="pill">${dayActivityCounts.get(dayKey(entry.date))} activité(s) ce jour-là</span>` : ""}
             </div>
             ${entry.note ? `<p class="muted">${escapeHtml(entry.note)}</p>` : ""}
+            <div class="actions-row">
+              <button class="btn btn-outline" type="button" data-action="open-photo-viewer" data-source="progress" data-id="${escapeHtml(entry.id)}">Voir en grand</button>
+            </div>
           </div>
         </article>
       `).join("")}
@@ -42,6 +47,12 @@ export function renderProgress(node) {
   const entries = [...(state.visualProgressEntries || [])].sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime());
   const latestEntry = entries[0] || null;
   const timelineEntries = [...entries].sort((left, right) => new Date(left.date).getTime() - new Date(right.date).getTime());
+  const dayActivityCounts = state.history.reduce((accumulator, entry) => {
+    const key = dayKey(entry.date);
+    if (!key) return accumulator;
+    accumulator.set(key, (accumulator.get(key) || 0) + 1);
+    return accumulator;
+  }, new Map());
 
   node.innerHTML = `
     <div class="section progress-photo-screen">
@@ -118,7 +129,7 @@ export function renderProgress(node) {
 
         ${draft.photoDataUrl ? `
           <div class="progress-photo-preview">
-            <img src="${draft.photoDataUrl}" alt="Aperçu progression" />
+            <img src="${draft.photoDataUrl}" alt="Aperçu progression" decoding="async" />
           </div>
         ` : ""}
       </div>
@@ -131,8 +142,10 @@ export function renderProgress(node) {
           </div>
           <span class="pill">${latestEntry ? escapeHtml(latestEntry.zone) : "commence aujourd’hui"}</span>
         </div>
-        ${renderTimeline(timelineEntries)}
+        ${renderTimeline(timelineEntries, dayActivityCounts)}
       </div>
     </div>
+
+    ${renderPhotoViewer()}
   `;
 }
