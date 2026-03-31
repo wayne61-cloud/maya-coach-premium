@@ -81,10 +81,17 @@ function renderDetailPhotos() {
 
   return `
     <div class="list">
-      ${detailPhotos.map((photo) => `
+      ${detailPhotos.map((photo) => {
+        const captionParts = [
+          photo.zone || "Photo",
+          formatShortDate(photo.date || photo.createdAt || new Date().toISOString()),
+          photo.weightKg ? `${photo.weightKg} kg` : "",
+          photo.context || ""
+        ].filter(Boolean);
+        return `
         <article class="progress-photo-card admin-photo-card">
-          <div class="progress-photo-media">
-            <img src="${escapeHtml(photo.photoDataUrl || "")}" alt="Photo ${escapeHtml(photo.zone || "")}" />
+          <div class="progress-photo-media" data-action="open-lightbox" data-src="${escapeHtml(photo.photoDataUrl || "")}" data-caption="${escapeHtml(captionParts.join(" · "))}">
+            <img src="${escapeHtml(photo.photoDataUrl || "")}" alt="Photo ${escapeHtml(photo.zone || "")}" loading="lazy" />
           </div>
           <div class="progress-photo-copy">
             <div class="progress-photo-head">
@@ -103,7 +110,7 @@ function renderDetailPhotos() {
             </div>
           </div>
         </article>
-      `).join("")}
+      `}).join("")}
     </div>
   `;
 }

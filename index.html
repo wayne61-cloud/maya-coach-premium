@@ -10,8 +10,8 @@
   <meta http-equiv="Expires" content="0" />
   <link rel="icon" type="image/jpeg" href="./maya-coach-ui/web-opt/logo/maya-app-icon.jpg" />
   <link rel="apple-touch-icon" href="./maya-coach-ui/web-opt/logo/maya-app-icon.jpg" />
-  <link rel="manifest" href="./manifest.webmanifest?v=20260331-3" />
-  <link rel="stylesheet" href="./styles.css?v=20260331-3" />
+  <link rel="manifest" href="./manifest.webmanifest?v=20260331-4" />
+  <link rel="stylesheet" href="./styles.css?v=20260331-4" />
   <title>MAYA Fitness</title>
 </head>
 <body>
@@ -164,6 +164,35 @@
 
   <div class="toast" id="toast"></div>
   <div class="onboarding-shell" id="onboardingShell"></div>
+
+  <!-- Lightbox for full-screen photo viewing -->
+  <div class="lightbox-overlay" id="lightboxOverlay" hidden>
+    <button class="lightbox-close" id="lightboxClose" aria-label="Fermer">&times;</button>
+    <div class="lightbox-body">
+      <img class="lightbox-img" id="lightboxImg" src="" alt="Photo agrandie" />
+      <div class="lightbox-caption" id="lightboxCaption"></div>
+    </div>
+  </div>
+
+  <!-- Admin moderation modal -->
+  <div class="modal-overlay" id="adminReasonModal" hidden>
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <h3 id="adminReasonTitle">Motif de suppression</h3>
+        <button class="ghost-link" data-action="close-admin-modal">Annuler</button>
+      </div>
+      <div class="field-stack">
+        <label class="field-label" for="adminReasonInput">Raison</label>
+        <div class="field-shell surface-form">
+          <textarea id="adminReasonInput" rows="3" maxlength="240" placeholder="Raison de la suppression du compte..."></textarea>
+        </div>
+      </div>
+      <div class="actions-row two" style="margin-top:12px;">
+        <button class="btn btn-outline" data-action="close-admin-modal">Annuler</button>
+        <button class="btn btn-bad" id="adminReasonConfirm">Confirmer la suppression</button>
+      </div>
+    </div>
+  </div>
 
   <script type="module">
     window.__MAYA_CONFIG__ = window.__MAYA_CONFIG__ || {};
