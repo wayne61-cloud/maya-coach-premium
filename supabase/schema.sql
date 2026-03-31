@@ -168,6 +168,38 @@ alter table streaks enable row level security;
 alter table recovery_logs enable row level security;
 alter table ai_memory enable row level security;
 
+alter table profiles add column if not exists email text;
+alter table profiles add column if not exists role text not null default 'user';
+alter table profiles add column if not exists account_status text not null default 'active';
+alter table profiles alter column account_status set default 'pending';
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'profiles_role_check'
+  ) then
+    alter table public.profiles
+      add constraint profiles_role_check
+      check (role in ('user', 'admin'));
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'profiles_account_status_check'
+  ) then
+    alter table public.profiles
+      add constraint profiles_account_status_check
+      check (account_status in ('pending', 'active', 'suspended', 'banned'));
+  end if;
+end $$;
+
+create index if not exists idx_profiles_email on profiles(email);
+create index if not exists idx_profiles_role_status on profiles(role, account_status);
+
 create or replace function public.is_active_account()
 returns boolean
 language sql
@@ -282,38 +314,6 @@ create policy "ai_memory_owner_access" on ai_memory
   using (public.can_access_own_profile(ai_memory.profile_id))
   with check (public.can_access_own_profile(ai_memory.profile_id));
 
-alter table profiles add column if not exists email text;
-alter table profiles add column if not exists role text not null default 'user';
-alter table profiles add column if not exists account_status text not null default 'active';
-alter table profiles alter column account_status set default 'pending';
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_constraint
-    where conname = 'profiles_role_check'
-  ) then
-    alter table public.profiles
-      add constraint profiles_role_check
-      check (role in ('user', 'admin'));
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_constraint
-    where conname = 'profiles_account_status_check'
-  ) then
-    alter table public.profiles
-      add constraint profiles_account_status_check
-      check (account_status in ('pending', 'active', 'suspended', 'banned'));
-  end if;
-end $$;
-
-create index if not exists idx_profiles_email on profiles(email);
-create index if not exists idx_profiles_role_status on profiles(role, account_status);
-
 create table if not exists progress_photos (
   id uuid primary key default gen_random_uuid(),
   profile_id uuid not null references profiles(id) on delete cascade,
@@ -349,6 +349,67 @@ as $$
       and coalesce(account_status, 'active') = 'active'
   );
 $$;
+
+create or replace function public.handle_auth_user_created()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  next_role text := lower(coalesce(new.raw_user_meta_data->>'app_role', new.raw_user_meta_data->>'role', 'user'));
+  next_status text := lower(coalesce(new.raw_user_meta_data->>'account_status', ''));
+begin
+  if next_role not in ('admin', 'user') then
+    next_role := 'user';
+  end if;
+
+  if next_status not in ('pending', 'active', 'suspended', 'banned') then
+    next_status := case when next_role = 'admin' then 'active' else 'pending' end;
+  end if;
+
+  insert into public.profiles (
+    auth_user_id,
+    email,
+    name,
+    role,
+    account_status,
+    created_at,
+    updated_at
+  )
+  values (
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data->>'display_name', new.raw_user_meta_data->>'name', ''),
+    next_role,
+    next_status,
+    coalesce(new.created_at, now()),
+    now()
+  )
+  on conflict (auth_user_id) do update
+    set email = excluded.email,
+        name = case
+          when excluded.name <> '' then excluded.name
+          else profiles.name
+        end,
+        role = case
+          when profiles.role = 'admin' then 'admin'
+          else excluded.role
+        end,
+        account_status = case
+          when profiles.role = 'admin' then profiles.account_status
+          else excluded.account_status
+        end,
+        updated_at = now();
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_auth_user_created();
 
 drop policy if exists "profiles_admin_access" on profiles;
 create policy "profiles_admin_access" on profiles
@@ -476,3 +537,37 @@ create policy "progress_photos_delete_own_or_admin" on storage.objects
       or public.is_admin_user()
     )
   );
+
+insert into public.profiles (
+  auth_user_id,
+  email,
+  name,
+  role,
+  account_status,
+  created_at,
+  updated_at
+)
+select
+  users.id,
+  users.email,
+  coalesce(users.raw_user_meta_data->>'display_name', users.raw_user_meta_data->>'name', ''),
+  case
+    when lower(coalesce(users.raw_user_meta_data->>'app_role', users.raw_user_meta_data->>'role', 'user')) = 'admin' then 'admin'
+    else 'user'
+  end,
+  case
+    when lower(coalesce(users.raw_user_meta_data->>'app_role', users.raw_user_meta_data->>'role', 'user')) = 'admin' then 'active'
+    when lower(coalesce(users.raw_user_meta_data->>'account_status', '')) in ('pending', 'active', 'suspended', 'banned')
+      then lower(users.raw_user_meta_data->>'account_status')
+    else 'pending'
+  end,
+  coalesce(users.created_at, now()),
+  now()
+from auth.users as users
+on conflict (auth_user_id) do update
+  set email = excluded.email,
+      name = case
+        when excluded.name <> '' then excluded.name
+        else profiles.name
+      end,
+      updated_at = now();

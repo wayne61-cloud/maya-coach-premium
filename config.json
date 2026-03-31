@@ -6,18 +6,18 @@
   "auth": {
     "previewEnabled": false,
     "adminEmails": [
-      "admin@maya.fitness"
+      "2admin@admin.com"
     ]
   },
   "services": {
     "backend": {
       "enabled": false,
-      "url": "https://YOUR_PRIVATE_BACKEND_DOMAIN"
+      "url": ""
     },
     "supabase": {
       "enabled": true,
-      "url": "https://YOUR_PROJECT.supabase.co",
-      "anonKey": "YOUR_SUPABASE_PUBLISHABLE_OR_ANON_KEY",
+      "url": "https://trnodvlasjefhjcftofh.supabase.co",
+      "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRybm9kdmxhc2plZmhqY2Z0b2ZoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NDc2NjEsImV4cCI6MjA5MDUyMzY2MX0.hvVGr4qQ-e6bdjFdmhpmZ7Q--FLiuF4w8KDSgfcrhCA",
       "avatarBucket": "avatars",
       "progressBucket": "progress-photos"
     },

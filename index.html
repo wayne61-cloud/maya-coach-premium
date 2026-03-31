@@ -10,8 +10,8 @@
   <meta http-equiv="Expires" content="0" />
   <link rel="icon" type="image/jpeg" href="./maya-coach-ui/web-opt/logo/maya-app-icon.jpg" />
   <link rel="apple-touch-icon" href="./maya-coach-ui/web-opt/logo/maya-app-icon.jpg" />
-  <link rel="manifest" href="./manifest.webmanifest?v=20260330-1" />
-  <link rel="stylesheet" href="./styles.css?v=20260330-1" />
+  <link rel="manifest" href="./manifest.webmanifest?v=20260331-1" />
+  <link rel="stylesheet" href="./styles.css?v=20260331-1" />
   <title>MAYA Fitness</title>
 </head>
 <body>
@@ -169,7 +169,7 @@
     window.__MAYA_CONFIG__ = window.__MAYA_CONFIG__ || {};
 
     try {
-      const response = await fetch("./config.json?v=20260330-1", { cache: "no-store" });
+      const response = await fetch("./config.json?v=20260331-1", { cache: "no-store" });
       if (response.ok) {
         const runtimeConfig = await response.json();
         if (runtimeConfig && typeof runtimeConfig === "object") {
@@ -178,7 +178,7 @@
       }
     } catch {}
 
-    await import("./js/main.js?v=20260330-1");
+    await import("./js/main.js?v=20260331-1");
   </script>
 </body>
 </html>

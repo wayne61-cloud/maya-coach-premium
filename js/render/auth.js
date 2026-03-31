@@ -23,7 +23,7 @@ function renderNotice() {
     return `<div class="helper-note info-note">${escapeHtml(state.authState.notice)}</div>`;
   }
   if (hasCloudProductConfig()) {
-    return `<div class="helper-note calm-note">Compte unique, données connectées, modération admin et session persistante avant d’entrer dans l’app.</div>`;
+    return `<div class="helper-note calm-note">Compte personnel sécurisé, validation manuelle des inscriptions et synchronisation cloud continue avant d’entrer dans l’app.</div>`;
   }
   if (isPreviewAuthEnabled()) {
     return `<div class="helper-note info-note">Mode local réservé au développement sur cette machine tant que le backend produit n’est pas branché.</div>`;
@@ -46,7 +46,7 @@ export function renderAuth(node) {
         <div class="auth-hero auth-hero-poster">
           <div class="eyebrow">Maya Fitness</div>
           <h1>Connexion athlète</h1>
-          <p>Une entrée plus propre, plus lisible et plus cohérente: un seul thème, une seule direction, zéro bruit inutile.</p>
+          <p>Accès privé à ton espace d’entraînement, avec modération admin, données synchronisées et expérience plus nette dès la connexion.</p>
 
           <div class="auth-hero-stack">
             <div class="auth-stat-line">
@@ -72,7 +72,7 @@ export function renderAuth(node) {
 
           <div class="auth-form-head">
             <strong>${isSignup ? "Créer ton espace" : "Reprendre ta session"}</strong>
-            <span>${cloudReady ? "Compte synchronisé et modéré" : (previewEnabled ? "Mode local réservé au développement" : "Connexion réelle requise")}</span>
+            <span>${cloudReady ? "Inscription modérée, données synchronisées et accès privé" : (previewEnabled ? "Mode local réservé au développement" : "Connexion réelle requise")}</span>
           </div>
 
           <div class="auth-form-grid">
@@ -116,8 +116,8 @@ export function renderAuth(node) {
 
         <div class="auth-footer-card auth-footer-minimal">
           <div class="auth-footer-copy">
-            <strong>${icon("spark", "", 15)} Build ${escapeHtml(APP_CONFIG.product.name)}</strong>
-            <span>Session ${escapeHtml(authSessionLabel())} • noir profond, accent Maya et navigation allégée.</span>
+            <strong>${icon("spark", "", 15)} ${escapeHtml(APP_CONFIG.product.name)}</strong>
+            <span>Session ${escapeHtml(authSessionLabel())} • accès privé, navigation allégée et rôle admin masqué hors connexion autorisée.</span>
           </div>
         </div>
       </div>

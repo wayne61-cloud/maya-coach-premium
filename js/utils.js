@@ -127,3 +127,21 @@ export function buildEmptyState(title, body, actionLabel, action) {
     </div>
   `;
 }
+
+export function readErrorMessage(error, fallback = "Erreur inconnue") {
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error === "object") {
+    const candidates = [
+      error.message,
+      error.error_description,
+      error.description,
+      error.error,
+      error.details,
+      error.hint
+    ];
+    const match = candidates.find((value) => typeof value === "string" && value.trim());
+    if (match) return match;
+  }
+  const raw = String(error ?? "").trim();
+  return raw && raw !== "[object Object]" ? raw : fallback;
+}

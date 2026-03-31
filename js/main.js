@@ -22,6 +22,7 @@ import {
 } from "./supabase.js";
 import { pullSyncSnapshot, pushSyncSnapshot, scheduleAutoSync } from "./sync.js";
 import { defaultCustomWorkoutDraft, defaultProfile, persistFavorites, persistVisualProgressEntries, resetPhotoProgressDraft, state, updateProfile } from "./state.js";
+import { readErrorMessage } from "./utils.js";
 import { APP_VERSION } from "./version.js";
 import { appendExerciseToCustomWorkout, applyFeedback, buildAdjustedPlan, buildCustomPlanFromDraft, buildCustomWorkoutCoachAlerts, buildNoushiChallengePlan, createCustomWorkoutSession, createProtocolHistoryEntry, finishWorkout, historyEntryToPlan, removeCustomWorkoutSession, resetCustomWorkoutDraft, setActiveCustomWorkoutSession, setCustomWorkoutDraft, startPlan, workoutDoneAction, workoutModifyAction, workoutSkipAction } from "./workout.js";
 
@@ -208,10 +209,10 @@ async function handleAuthSubmit() {
   } catch (error) {
     setAuthRuntimeState({
       status: "signed_out",
-      error: error instanceof Error ? error.message : String(error)
+      error: readErrorMessage(error, "Erreur d’authentification")
     });
     refreshCurrentPage();
-    showToast(error instanceof Error ? error.message : "Erreur d’auth");
+    showToast(readErrorMessage(error, "Erreur d’auth"));
   }
 }
 
@@ -234,10 +235,10 @@ async function handlePreviewEntry() {
   } catch (error) {
     setAuthRuntimeState({
       status: "signed_out",
-      error: error instanceof Error ? error.message : String(error)
+      error: readErrorMessage(error, "Erreur accès local")
     });
     refreshCurrentPage();
-    showToast(error instanceof Error ? error.message : "Erreur accès local");
+    showToast(readErrorMessage(error, "Erreur accès local"));
   }
 }
 
@@ -273,10 +274,10 @@ async function handleGeneratePlan() {
     state.aiRuntime = {
       ...state.aiRuntime,
       status: "error",
-      error: error instanceof Error ? error.message : String(error),
+      error: readErrorMessage(error, "Erreur IA"),
       lastCheckedAt: new Date().toISOString()
     };
-    showToast(error instanceof Error ? error.message : "Erreur IA");
+    showToast(readErrorMessage(error, "Erreur IA"));
   } finally {
     if (button) {
       button.removeAttribute("disabled");

@@ -44,12 +44,13 @@ import {
   sanitizeVisualProgressEntry,
   state
 } from "./state.js";
-import { dayKey } from "./utils.js";
+import { dayKey, readErrorMessage } from "./utils.js";
 
 const SUPABASE_BROWSER_MODULE = "https://esm.sh/@supabase/supabase-js@2?bundle";
 
 let supabaseClientPromise = null;
 let authListenerBound = false;
+let suppressSupabaseAuthListener = false;
 let profileRowCache = null;
 
 function isConfiguredAdminEmail(email) {
@@ -1267,6 +1268,7 @@ async function bindSupabaseAuthListener() {
   if (authListenerBound || !hasSupabaseProductConfig()) return;
   const client = await getSupabaseClient();
   client.auth.onAuthStateChange((_event, session) => {
+    if (suppressSupabaseAuthListener) return;
     if (session?.user) {
       setAuthenticatedUser({
         session,
@@ -1286,7 +1288,7 @@ async function bindSupabaseAuthListener() {
           setAuthState({
             status: "error",
             mode: "supabase",
-            error: error instanceof Error ? error.message : String(error)
+            error: readErrorMessage(error)
           });
         });
       return;
@@ -1450,42 +1452,47 @@ export async function signUpWithPassword({ displayName, email, password }) {
   if (safePassword.length < 8) throw new Error("Mot de passe trop court");
 
   if (hasSupabaseProductConfig()) {
-    const client = await getSupabaseClient();
-    const { data, error } = await client.auth.signUp({
-      email: safeEmail,
-      password: safePassword,
-      options: {
-        data: {
-          display_name: safeDisplayName
+    suppressSupabaseAuthListener = true;
+    try {
+      const client = await getSupabaseClient();
+      const { data, error } = await client.auth.signUp({
+        email: safeEmail,
+        password: safePassword,
+        options: {
+          data: {
+            display_name: safeDisplayName
+          }
         }
-      }
-    });
-    if (error) throw error;
+      });
+      if (error) throw error;
 
-    if (data.user && data.session) {
-      setAuthenticatedUser({
-        session: data.session,
-        user: data.user,
-        mode: "supabase",
-        notice: ""
-      });
-      state.profile = sanitizeProfile({ ...defaultProfile, name: safeDisplayName });
-      persistProfile();
-      const profileRow = await ensureProfileRow({ syncLocal: true });
-      state.profile = profileRowToLocalProfile(profileRow);
-      persistProfile();
-      await enforceAccountStatusOrThrow();
-      await pushSupabaseSnapshot();
-      await pullSupabaseSnapshot();
-    } else {
-      setSignedOutState({
-        mode: "supabase",
-        notice: isConfiguredAdminEmail(safeEmail)
-          ? "Compte admin créé. Vérifie ton email pour confirmer la session si la confirmation est activée."
-          : "Compte créé. Vérifie ton email puis attends la validation administrateur si la confirmation est activée."
-      });
+      if (data.user && data.session) {
+        setAuthenticatedUser({
+          session: data.session,
+          user: data.user,
+          mode: "supabase",
+          notice: ""
+        });
+        state.profile = sanitizeProfile({ ...defaultProfile, name: safeDisplayName });
+        persistProfile();
+        const profileRow = await ensureProfileRow({ syncLocal: true });
+        state.profile = profileRowToLocalProfile(profileRow);
+        persistProfile();
+        await enforceAccountStatusOrThrow();
+        await pushSupabaseSnapshot();
+        await pullSupabaseSnapshot();
+      } else {
+        setSignedOutState({
+          mode: "supabase",
+          notice: isConfiguredAdminEmail(safeEmail)
+            ? "Compte admin créé. Vérifie ton email pour confirmer la session si la confirmation est activée."
+            : "Compte créé. Vérifie ton email puis attends la validation administrateur si la confirmation est activée."
+        });
+      }
+      return data;
+    } finally {
+      suppressSupabaseAuthListener = false;
     }
-    return data;
   }
 
   if (isManagedBackendMode()) {
@@ -1561,26 +1568,31 @@ export async function signInWithPassword({ email, password }) {
   if (!safePassword) throw new Error("Mot de passe requis");
 
   if (hasSupabaseProductConfig()) {
-    const client = await getSupabaseClient();
-    const { data, error } = await client.auth.signInWithPassword({
-      email: safeEmail,
-      password: safePassword
-    });
-    if (error) throw error;
-    if (data.user) {
-      setAuthenticatedUser({
-        session: data.session || null,
-        user: data.user,
-        mode: "supabase",
-        notice: ""
+    suppressSupabaseAuthListener = true;
+    try {
+      const client = await getSupabaseClient();
+      const { data, error } = await client.auth.signInWithPassword({
+        email: safeEmail,
+        password: safePassword
       });
-      const profileRow = await ensureProfileRow();
-      state.profile = profileRowToLocalProfile(profileRow);
-      persistProfile();
-      await enforceAccountStatusOrThrow();
-      await pullSupabaseSnapshot();
+      if (error) throw error;
+      if (data.user) {
+        setAuthenticatedUser({
+          session: data.session || null,
+          user: data.user,
+          mode: "supabase",
+          notice: ""
+        });
+        const profileRow = await ensureProfileRow();
+        state.profile = profileRowToLocalProfile(profileRow);
+        persistProfile();
+        await enforceAccountStatusOrThrow();
+        await pullSupabaseSnapshot();
+      }
+      return data;
+    } finally {
+      suppressSupabaseAuthListener = false;
     }
-    return data;
   }
 
   if (isManagedBackendMode()) {
