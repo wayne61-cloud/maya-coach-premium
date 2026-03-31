@@ -41,9 +41,12 @@ export const defaultProfile = {
   name: "",
   age: "",
   weightKg: "",
+  bio: "",
   photoDataUrl: "",
   role: "user",
   accountStatus: "active",
+  moderationReason: "",
+  deletedAt: "",
   goal: "muscle",
   level: "2",
   frequency: "3",
@@ -111,11 +114,14 @@ export function sanitizeProfile(raw) {
     name: String(profile.name || "").trim().slice(0, 40),
     age: sanitizeNumericText(profile.age, { min: 10, max: 99 }),
     weightKg: sanitizeNumericText(profile.weightKg, { min: 35, max: 220, decimals: true }),
+    bio: String(profile.bio || "").trim().slice(0, 280),
     photoDataUrl: sanitizeImageReference(profile.photoDataUrl),
     role: ["user", "admin"].includes(profile.role) ? profile.role : defaultProfile.role,
     accountStatus: ["pending", "active", "suspended", "banned"].includes(profile.accountStatus)
       ? profile.accountStatus
       : defaultProfile.accountStatus,
+    moderationReason: String(profile.moderationReason || "").trim().slice(0, 240),
+    deletedAt: typeof profile.deletedAt === "string" ? profile.deletedAt : "",
     equipment: Array.isArray(profile.equipment) && profile.equipment.length ? profile.equipment : [...defaultProfile.equipment]
   };
 }
@@ -327,7 +333,14 @@ export const state = {
     statusFilter: "all",
     loading: false,
     error: "",
-    lastFetchedAt: ""
+    lastFetchedAt: "",
+    detailOpen: false,
+    detailTab: "photos",
+    detailLoading: false,
+    detailError: "",
+    detailUser: null,
+    detailPhotos: [],
+    detailNotes: []
   },
   coachSheetOpen: false,
   nutritionSheetOpen: false

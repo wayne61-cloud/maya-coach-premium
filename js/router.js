@@ -61,7 +61,7 @@ const PAGE_LABELS = {
   help: "Je sais pas comment",
   relax: "Recovery",
   settings: "Profil",
-  admin: "Administration"
+  admin: "Modération"
 };
 
 function normalizePage(page) {
@@ -90,6 +90,10 @@ function guardPageAccess(page) {
     return page === "auth" ? "auth" : "auth";
   }
 
+  if (state.profile?.role === "admin") {
+    return page === "auth" ? "admin" : "admin";
+  }
+
   if (page === "auth") {
     return "home";
   }
@@ -114,7 +118,7 @@ function syncActiveNavigation(page) {
 function syncQuickNav(page) {
   const quickNav = document.getElementById("quickNav");
   if (!quickNav) return;
-  const hidden = page === "auth" || page === "admin";
+  const hidden = page === "auth" || page === "admin" || state.profile?.role === "admin";
   quickNav.classList.toggle("hidden", hidden);
   quickNav.dataset.group = isNoushiPage(page) ? "noushi" : "main";
 }
@@ -128,8 +132,10 @@ function syncShell(page) {
 
   const nav = document.getElementById("mainNav");
   if (nav) {
+    const isModeratorOnly = state.profile?.role === "admin";
     nav.classList.toggle("hidden", page === "auth");
-    nav.classList.toggle("expanded", Boolean(state.navExpanded) && page !== "auth");
+    nav.classList.toggle("expanded", isModeratorOnly ? true : (Boolean(state.navExpanded) && page !== "auth"));
+    nav.classList.toggle("moderation-only", isModeratorOnly);
   }
 
   syncQuickNav(page);
@@ -160,6 +166,16 @@ function syncShell(page) {
   if (adminButton) {
     adminButton.hidden = state.profile?.role !== "admin";
   }
+
+  const isModeratorOnly = state.profile?.role === "admin";
+  document.querySelectorAll(".nav-btn").forEach((button) => {
+    if (!(button instanceof HTMLElement)) return;
+    if (button.id === "navAdminButton") {
+      button.hidden = !isModeratorOnly;
+      return;
+    }
+    button.hidden = isModeratorOnly;
+  });
 }
 
 export function refreshShell() {

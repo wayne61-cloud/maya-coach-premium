@@ -143,6 +143,12 @@ function renderIdentityTab(shared) {
               <input id="profileWeight" type="number" min="35" max="220" step="0.1" placeholder="74" value="${escapeHtml(profile.weightKg || "")}" />
             </div>
           </div>
+          <div class="field-stack full-span">
+            <label class="field-label" for="profileBio">Description</label>
+            <div class="field-shell surface-form">
+              <textarea id="profileBio" rows="4" placeholder="Décris ton contexte, ton objectif ou tes contraintes pour laisser une trace dans ton profil.">${escapeHtml(profile.bio || "")}</textarea>
+            </div>
+          </div>
         </div>
       </details>
 

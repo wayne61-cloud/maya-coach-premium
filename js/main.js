@@ -8,12 +8,16 @@ import { buildDailyMealPlan, inferTrainingLoad, saveNutritionPlan } from "./nutr
 import { goBack, goToPage, initRouter, refreshCurrentPage, refreshShell } from "./router.js";
 import { computeCoachRecommendations } from "./recommendations.js";
 import {
+  closeAdminUserDetail,
+  deleteAdminUserAccount,
   continueWithPreview,
   deleteAdminProgressPhoto,
   deleteAdminUserPhotos,
   initializeAuth,
   isCloudSessionReady,
+  openAdminUserDetail,
   refreshAdminDashboard,
+  setAdminUserDetailTab,
   setAdminUserStatus,
   signInWithPassword,
   signOutCurrentUser,
@@ -86,6 +90,7 @@ function getProfileFromDom() {
     name: document.getElementById("profileName")?.value || state.profile?.name || "",
     age: document.getElementById("profileAge")?.value || state.profile?.age || "",
     weightKg: document.getElementById("profileWeight")?.value || state.profile?.weightKg || "",
+    bio: document.getElementById("profileBio")?.value || state.profile?.bio || "",
     goal: document.getElementById("profileGoal")?.value || state.profile?.goal || defaultProfile.goal,
     level: document.getElementById("profileLevel")?.value || state.profile?.level || defaultProfile.level,
     frequency: document.getElementById("profileFrequency")?.value || state.profile?.frequency || defaultProfile.frequency,
@@ -164,6 +169,25 @@ async function routeAfterAuthentication() {
     password: "",
     confirmPassword: ""
   };
+
+  if (state.profile?.role === "admin") {
+    updateFlowiseConfig({
+      enabled: false,
+      status: "idle",
+      error: ""
+    });
+    await navigateToPage("admin");
+    refreshCurrentPage();
+    await refreshAdminDashboard().catch((error) => {
+      state.adminRuntime = {
+        ...(state.adminRuntime || {}),
+        error: readErrorMessage(error, "Impossible de charger le pôle de modération")
+      };
+    });
+    refreshCurrentPage();
+    return;
+  }
+
   state.flowiseConfig.enabled = true;
   updateFlowiseConfig({
     enabled: true,
@@ -199,7 +223,7 @@ async function handleAuthSubmit() {
       showToast(
         state.currentUser
           ? "Compte créé"
-          : (result?.message || "Compte créé, validation admin requise")
+          : (result?.message || "Compte créé, connecte-toi maintenant")
       );
     } else {
       await signInWithPassword(payload);
@@ -838,6 +862,18 @@ async function routeAction(action, target) {
       await handleAdminRefresh();
       showToast("Dashboard admin actualisé");
       return;
+    case "admin-open-user":
+      await openAdminUserDetail(target.dataset.id, target.dataset.tab || "photos");
+      refreshCurrentPage();
+      return;
+    case "admin-close-user":
+      closeAdminUserDetail();
+      refreshCurrentPage();
+      return;
+    case "admin-detail-tab":
+      setAdminUserDetailTab(target.dataset.tab || "photos");
+      refreshCurrentPage();
+      return;
     case "admin-filter-user":
       updateAdminFilter(
         "selectedProfileId",
@@ -871,6 +907,15 @@ async function routeAction(action, target) {
       if (!window.confirm(`Confirmer: ${label} cet utilisateur ?`)) return;
       await setAdminUserStatus(target.dataset.id, nextStatus);
       showToast(`Statut mis à jour: ${nextStatus}`);
+      refreshCurrentPage();
+      return;
+    }
+    case "admin-delete-account": {
+      const reason = window.prompt("Raison de la suppression du compte", "");
+      if (!reason) return;
+      if (!window.confirm("Confirmer la suppression de ce compte et la purge de ses données dans l’app ?")) return;
+      await deleteAdminUserAccount(target.dataset.id, reason);
+      showToast("Compte supprimé");
       refreshCurrentPage();
       return;
     }
@@ -1194,10 +1239,12 @@ async function init() {
     window.addEventListener("resize", syncViewportHeight);
     window.visualViewport?.addEventListener("resize", syncViewportHeight);
     window.addEventListener("online", () => {
-      if (state.currentUser) {
+      if (state.currentUser && state.profile?.role !== "admin") {
         pullSyncSnapshot().catch(() => {});
       }
-      syncFlowiseWidget().catch(() => {});
+      if (state.profile?.role !== "admin") {
+        syncFlowiseWidget().catch(() => {});
+      }
       refreshCurrentPage();
     });
     window.addEventListener("offline", refreshCurrentPage);
@@ -1206,10 +1253,12 @@ async function init() {
         syncViewportHeight();
         refreshNotificationPermission();
         notifyTopRecommendation(false).catch(() => {});
-        if (state.currentUser) {
+        if (state.currentUser && state.profile?.role !== "admin") {
           pullSyncSnapshot().catch(() => {});
         }
-        syncFlowiseWidget().catch(() => {});
+        if (state.profile?.role !== "admin") {
+          syncFlowiseWidget().catch(() => {});
+        }
         refreshCurrentPage();
       }
     });
@@ -1217,10 +1266,21 @@ async function init() {
 
   await initializeAuth();
   initRouter();
-  await navigateToPage(state.currentUser ? "home" : "auth", { resetHistory: true });
-  await syncFlowiseWidget().catch(() => {});
+  await navigateToPage(state.currentUser ? (state.profile?.role === "admin" ? "admin" : "home") : "auth", { resetHistory: true });
+  if (state.profile?.role === "admin") {
+    await refreshAdminDashboard().catch((error) => {
+      state.adminRuntime = {
+        ...(state.adminRuntime || {}),
+        error: readErrorMessage(error, "Impossible de charger le pôle de modération")
+      };
+    });
+    refreshCurrentPage();
+  }
+  if (state.profile?.role !== "admin") {
+    await syncFlowiseWidget().catch(() => {});
+  }
   const diagnostics = getAppDiagnostics();
-  if (diagnostics.storageOk && computeCoachRecommendations().length && state.notificationConfig.enabled) {
+  if (state.profile?.role !== "admin" && diagnostics.storageOk && computeCoachRecommendations().length && state.notificationConfig.enabled) {
     notifyTopRecommendation(false).catch(() => {});
   }
 }

@@ -228,7 +228,14 @@ function resetUserScopedState({ preserveProfileName = "" } = {}) {
     statusFilter: "all",
     loading: false,
     error: "",
-    lastFetchedAt: ""
+    lastFetchedAt: "",
+    detailOpen: false,
+    detailTab: "photos",
+    detailLoading: false,
+    detailError: "",
+    detailUser: null,
+    detailPhotos: [],
+    detailNotes: []
   };
 
   persistProfile();
@@ -452,15 +459,18 @@ function buildProfilePayload(profile, currentUser, photoPath = "", existingRow =
     ? "admin"
     : (existingRow?.role || profile?.role || defaultProfile.role);
   const accountStatus = existingRow?.account_status
-    || (isAdminEmail ? "active" : "pending");
+    || "active";
   return {
     auth_user_id: currentUser.id,
     email: currentUser.email || null,
     name: profile?.name || currentUser.displayName || "",
     age: profile?.age ? parseInt(profile.age, 10) : null,
     weight_kg: profile?.weightKg ? Number(profile.weightKg) : null,
+    bio: profile?.bio || "",
     role,
     account_status: accountStatus,
+    moderation_reason: existingRow?.moderation_reason || "",
+    deleted_at: existingRow?.deleted_at || null,
     goal: profile?.goal || defaultProfile.goal,
     level: profile?.level || defaultProfile.level,
     frequency: profile?.frequency || defaultProfile.frequency,
@@ -599,9 +609,12 @@ function profileRowToLocalProfile(profileRow) {
     name: profileRow?.name || state.currentUser?.displayName || "",
     age: profileRow?.age ? String(profileRow.age) : "",
     weightKg: profileRow?.weight_kg != null ? String(profileRow.weight_kg) : "",
+    bio: profileRow?.bio || "",
     photoDataUrl: profileRow?.photo_path || "",
     role: profileRow?.role || defaultProfile.role,
     accountStatus: profileRow?.account_status || defaultProfile.accountStatus,
+    moderationReason: profileRow?.moderation_reason || "",
+    deletedAt: profileRow?.deleted_at || "",
     goal: profileRow?.goal || defaultProfile.goal,
     level: profileRow?.level || defaultProfile.level,
     frequency: profileRow?.frequency || defaultProfile.frequency,
@@ -892,11 +905,15 @@ async function enforceAccountStatusOrThrow() {
   if (!state.profile || state.profile.role === "admin") return;
   if (state.profile.accountStatus === "active") return;
 
-  const message = state.profile.accountStatus === "pending"
-    ? "Compte en attente de validation. L’administrateur doit approuver ton accès avant l’ouverture de l’app."
+  const moderationReason = String(state.profile.moderationReason || "").trim();
+  const baseMessage = state.profile.accountStatus === "pending"
+    ? "Compte temporairement indisponible."
     : state.profile.accountStatus === "banned"
-      ? "Compte banni. Contacte l’administrateur si tu penses qu’il s’agit d’une erreur."
-      : "Compte suspendu. Contacte l’administrateur pour réactiver l’accès.";
+      ? "Compte supprimé ou banni par la modération."
+      : "Compte suspendu par la modération.";
+  const message = moderationReason
+    ? `${baseMessage} Raison: ${moderationReason}`
+    : baseMessage;
 
   try {
     const client = await getSupabaseClient();
@@ -1486,7 +1503,7 @@ export async function signUpWithPassword({ displayName, email, password }) {
           mode: "supabase",
           notice: isConfiguredAdminEmail(safeEmail)
             ? "Compte admin créé. Vérifie ton email pour confirmer la session si la confirmation est activée."
-            : "Compte créé. Vérifie ton email puis attends la validation administrateur si la confirmation est activée."
+            : "Compte créé. Vérifie ton email si la confirmation est activée, puis connecte-toi."
         });
       }
       return data;
@@ -1525,7 +1542,7 @@ export async function signUpWithPassword({ displayName, email, password }) {
     resetUserScopedState({ preserveProfileName: safeDisplayName });
     setSignedOutState({
       mode: "backend",
-      notice: data.message || "Compte créé. L’administrateur doit maintenant valider ton accès."
+      notice: data.message || "Compte créé. Tu peux maintenant te connecter."
     });
     return data;
   }
@@ -1704,8 +1721,23 @@ function normalizeAdminProfileRow(row) {
     authUserId: row.auth_user_id,
     email: row.email || "",
     name: row.name || "",
+    bio: row.bio || "",
+    age: row.age != null ? String(row.age) : "",
+    weightKg: row.weight_kg != null ? String(row.weight_kg) : "",
     role: row.role || "user",
     accountStatus: row.account_status || "active",
+    moderationReason: row.moderation_reason || "",
+    deletedAt: row.deleted_at || "",
+    goal: row.goal || defaultProfile.goal,
+    level: row.level || defaultProfile.level,
+    frequency: row.frequency || defaultProfile.frequency,
+    place: row.place || defaultProfile.place,
+    sessionTime: row.session_time || defaultProfile.sessionTime,
+    preferredSplit: row.preferred_split || defaultProfile.preferredSplit,
+    foodPreference: row.food_preference || defaultProfile.foodPreference,
+    recoveryPreference: row.recovery_preference || defaultProfile.recoveryPreference,
+    coachTone: row.coach_tone || defaultProfile.coachTone,
+    photoPath: row.photo_path || "",
     createdAt: row.created_at || ""
   };
 }
@@ -1729,6 +1761,90 @@ function normalizeAdminPhotoRow(row) {
   };
 }
 
+function normalizeAdminNoteItem(item = {}) {
+  return {
+    id: String(item.id || ""),
+    kind: String(item.kind || "note"),
+    title: String(item.title || "Note"),
+    date: item.date || "",
+    description: String(item.description || "").trim(),
+    context: String(item.context || "").trim(),
+    meta: item.meta && typeof item.meta === "object" ? item.meta : {}
+  };
+}
+
+function syncAdminDetailPhotos(profileId) {
+  return (state.adminRuntime?.photos || [])
+    .filter((photo) => photo.profileId === profileId)
+    .sort((left, right) => new Date(right.date || right.createdAt || 0).getTime() - new Date(left.date || left.createdAt || 0).getTime());
+}
+
+export function closeAdminUserDetail() {
+  state.adminRuntime = {
+    ...(state.adminRuntime || {}),
+    detailOpen: false,
+    detailLoading: false,
+    detailError: "",
+    detailTab: "photos",
+    detailUser: null,
+    detailPhotos: [],
+    detailNotes: []
+  };
+}
+
+export function setAdminUserDetailTab(tab = "photos") {
+  state.adminRuntime = {
+    ...(state.adminRuntime || {}),
+    detailTab: tab === "notes" ? "notes" : "photos"
+  };
+}
+
+export async function openAdminUserDetail(profileId, tab = "photos") {
+  requireAdminAccess();
+  const selectedUser = (state.adminRuntime?.users || []).find((user) => user.id === profileId) || null;
+  state.adminRuntime = {
+    ...(state.adminRuntime || {}),
+    selectedProfileId: profileId,
+    detailOpen: true,
+    detailTab: tab === "notes" ? "notes" : "photos",
+    detailLoading: true,
+    detailError: "",
+    detailUser: selectedUser,
+    detailPhotos: syncAdminDetailPhotos(profileId),
+    detailNotes: []
+  };
+
+  if (isManagedBackendMode()) {
+    throw new Error("Le détail de modération n’est pas disponible sur ce backend.");
+  }
+
+  const client = await getSupabaseClient();
+  const { data, error } = await client.rpc("admin_get_user_detail", {
+    target_profile_id: profileId
+  });
+  if (error) {
+    state.adminRuntime = {
+      ...(state.adminRuntime || {}),
+      detailLoading: false,
+      detailError: error.message || "Impossible de charger le détail utilisateur"
+    };
+    throw error;
+  }
+
+  const normalizedUser = data?.profile
+    ? normalizeAdminProfileRow(data.profile)
+    : selectedUser;
+  state.adminRuntime = {
+    ...(state.adminRuntime || {}),
+    detailLoading: false,
+    detailError: "",
+    detailUser: normalizedUser,
+    detailPhotos: syncAdminDetailPhotos(profileId),
+    detailNotes: Array.isArray(data?.notes) ? data.notes.map(normalizeAdminNoteItem) : []
+  };
+  return state.adminRuntime;
+}
+
 export async function refreshAdminDashboard() {
   requireAdminAccess();
   if (isManagedBackendMode()) {
@@ -1740,10 +1856,14 @@ export async function refreshAdminDashboard() {
 
     try {
       const data = await backendRequest("/api/admin/dashboard");
+      const normalizedUsers = Array.isArray(data.users) ? data.users : [];
+      const normalizedPhotos = Array.isArray(data.photos) ? data.photos : [];
+      const selectedProfileId = state.adminRuntime?.selectedProfileId || "";
       state.adminRuntime = {
         ...(state.adminRuntime || {}),
-        users: Array.isArray(data.users) ? data.users : [],
-        photos: Array.isArray(data.photos) ? data.photos : [],
+        users: normalizedUsers,
+        photos: normalizedPhotos,
+        detailPhotos: selectedProfileId ? normalizedPhotos.filter((photo) => photo.profileId === selectedProfileId) : [],
         loading: false,
         error: "",
         lastFetchedAt: data.updatedAt || new Date().toISOString()
@@ -1770,7 +1890,7 @@ export async function refreshAdminDashboard() {
     const [profilesResult, photosResult] = await Promise.all([
       client
         .from("profiles")
-        .select("id, auth_user_id, email, name, role, account_status, created_at")
+        .select("id, auth_user_id, email, name, bio, age, weight_kg, role, account_status, moderation_reason, deleted_at, goal, level, frequency, place, session_time, preferred_split, food_preference, recovery_preference, coach_tone, photo_path, created_at")
         .order("created_at", { ascending: false }),
       client
         .from("progress_photos")
@@ -1802,11 +1922,15 @@ export async function refreshAdminDashboard() {
       ...row,
       photo_signed_url: await createSignedProgressPhotoUrl(client, row.photo_storage_path)
     })));
+    const normalizedUsers = (profilesResult.data || []).map(normalizeAdminProfileRow);
+    const normalizedPhotos = signedPhotos.map(normalizeAdminPhotoRow);
+    const selectedProfileId = state.adminRuntime?.selectedProfileId || "";
 
     state.adminRuntime = {
       ...(state.adminRuntime || {}),
-      users: (profilesResult.data || []).map(normalizeAdminProfileRow),
-      photos: signedPhotos.map(normalizeAdminPhotoRow),
+      users: normalizedUsers,
+      photos: normalizedPhotos,
+      detailPhotos: selectedProfileId ? normalizedPhotos.filter((photo) => photo.profileId === selectedProfileId) : [],
       loading: false,
       error: "",
       lastFetchedAt: new Date().toISOString()
@@ -1851,7 +1975,14 @@ export async function deleteAdminProgressPhoto(photoId) {
     .eq("id", photoId);
   if (error) throw error;
 
-  return refreshAdminDashboard();
+  await refreshAdminDashboard();
+  if (state.adminRuntime?.detailOpen && state.adminRuntime?.selectedProfileId) {
+    state.adminRuntime = {
+      ...(state.adminRuntime || {}),
+      detailPhotos: syncAdminDetailPhotos(state.adminRuntime.selectedProfileId)
+    };
+  }
+  return state.adminRuntime;
 }
 
 export async function deleteAdminUserPhotos(profileId) {
@@ -1883,7 +2014,14 @@ export async function deleteAdminUserPhotos(profileId) {
     .eq("profile_id", profileId);
   if (error) throw error;
 
-  return refreshAdminDashboard();
+  await refreshAdminDashboard();
+  if (state.adminRuntime?.detailOpen && state.adminRuntime?.selectedProfileId === profileId) {
+    state.adminRuntime = {
+      ...(state.adminRuntime || {}),
+      detailPhotos: []
+    };
+  }
+  return state.adminRuntime;
 }
 
 export async function setAdminUserStatus(profileId, status) {
@@ -1907,16 +2045,70 @@ export async function setAdminUserStatus(profileId, status) {
     throw new Error("Impossible de désactiver le compte admin connecté.");
   }
   const client = await getSupabaseClient();
+  const updatePayload = {
+    account_status: safeStatus,
+    updated_at: new Date().toISOString(),
+    ...(safeStatus === "active"
+      ? {
+          moderation_reason: "",
+          deleted_at: null
+        }
+      : {})
+  };
   const { error } = await client
     .from("profiles")
-    .update({
-      account_status: safeStatus,
-      updated_at: new Date().toISOString()
-    })
+    .update(updatePayload)
     .eq("id", profileId);
   if (error) throw error;
 
   return refreshAdminDashboard();
+}
+
+export async function deleteAdminUserAccount(profileId, reason) {
+  requireAdminAccess();
+  const safeReason = String(reason || "").trim();
+  if (!safeReason) {
+    throw new Error("Raison requise pour supprimer le compte.");
+  }
+
+  if (isManagedBackendMode()) {
+    throw new Error("Suppression de compte indisponible sur ce backend.");
+  }
+
+  const client = await getSupabaseClient();
+  const targetUser = (state.adminRuntime?.users || []).find((user) => user.id === profileId) || null;
+  const progressPaths = [...new Set(
+    (state.adminRuntime?.photos || [])
+      .filter((photo) => photo.profileId === profileId)
+      .map((photo) => photo.photoStoragePath)
+      .filter(Boolean)
+  )];
+
+  if (progressPaths.length) {
+    await client.storage
+      .from(getSupabaseProductConfig().progressBucket || "progress-photos")
+      .remove(progressPaths)
+      .catch(() => {});
+  }
+
+  if (targetUser?.authUserId) {
+    await client.storage
+      .from(getSupabaseProductConfig().avatarBucket || "avatars")
+      .remove([`${targetUser.authUserId}/avatar.jpg`])
+      .catch(() => {});
+  }
+
+  const { data, error } = await client.rpc("admin_remove_user_account", {
+    target_profile_id: profileId,
+    delete_reason: safeReason
+  });
+  if (error) throw error;
+
+  await refreshAdminDashboard();
+  if (state.adminRuntime?.detailOpen && state.adminRuntime?.selectedProfileId === profileId) {
+    closeAdminUserDetail();
+  }
+  return data;
 }
 
 export function updateSupabaseConfig(partialConfig) {

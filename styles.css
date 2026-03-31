@@ -46,10 +46,16 @@
   padding: 0;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   width: 100%;
   min-height: 100%;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -83,8 +89,15 @@ a {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
+}
+
+input,
+select,
+textarea {
+  font-size: 16px;
 }
 
 .app {
@@ -93,7 +106,7 @@ select {
   height: var(--app-height);
   min-height: 100svh;
   width: 100%;
-  max-width: 460px;
+  max-width: min(460px, 100vw);
   margin: 0 auto;
   border-left: 1px solid rgba(255, 226, 188, 0.08);
   border-right: 1px solid rgba(255, 226, 188, 0.08);
@@ -713,19 +726,21 @@ select {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   border-radius: 12px;
   border: 1px solid rgba(255, 226, 188, 0.1);
   background: transparent;
   color: #fff0da;
   padding: 9px 10px;
-  font-size: 0.83rem;
+  font-size: 16px;
   outline: none;
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   border-color: rgba(124, 201, 255, 0.8);
   box-shadow: 0 0 0 3px rgba(124, 201, 255, 0.18);
 }
@@ -745,10 +760,17 @@ select:focus {
 }
 
 .field-shell input,
-.field-shell select {
+.field-shell select,
+.field-shell textarea {
   padding: 7px 4px;
   border: none;
   box-shadow: none;
+}
+
+.field-shell textarea {
+  resize: vertical;
+  min-height: 92px;
+  line-height: 1.5;
 }
 
 .field-shell:focus-within {
@@ -2553,6 +2575,23 @@ summary {
   gap: 10px;
 }
 
+.bottom-nav.moderation-only {
+  padding-top: 0;
+}
+
+.bottom-nav.moderation-only .nav-bar-head {
+  display: none;
+}
+
+.bottom-nav.moderation-only .nav-pole-row {
+  grid-template-columns: 1fr;
+  max-height: none;
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
 .nav-toggle {
   border: 1px solid rgba(255, 230, 198, 0.1);
   border-radius: 14px;
@@ -3428,6 +3467,7 @@ summary {
 }
 
 .quick-nav.hidden {
+  display: none;
   opacity: 0;
   pointer-events: none;
   transform: translateX(-50%) translateY(12px);
@@ -3676,6 +3716,20 @@ summary {
   align-items: start;
 }
 
+.admin-user-card.active {
+  border-color: rgba(244, 197, 55, 0.3);
+  box-shadow: 0 14px 28px rgba(96, 58, 0, 0.16);
+}
+
+.admin-user-card-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-card-actions {
+  min-width: 156px;
+}
+
 .admin-photo-card {
   background: rgba(255, 255, 255, 0.035);
 }
@@ -3686,6 +3740,32 @@ summary {
 
 .admin-screen .progress-photo-card {
   background: rgba(255, 255, 255, 0.03);
+}
+
+.admin-detail-sheet {
+  gap: 14px;
+}
+
+.admin-detail-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-note-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 230, 198, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.admin-profile-note-card {
+  background: linear-gradient(170deg, rgba(25, 22, 18, 0.96), rgba(13, 13, 13, 0.98));
+}
+
+.admin-detail-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .home-day-grid,
@@ -4790,6 +4870,12 @@ summary {
 }
 
 @media (max-width: 640px) {
+  .app {
+    max-width: 100vw;
+    border-left: none;
+    border-right: none;
+  }
+
   .split-3,
   .split-2,
   .stats-grid,
@@ -4906,6 +4992,12 @@ summary {
   .custom-block-summary,
   .custom-search-result,
   .admin-user-card {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-card-actions,
+  .admin-detail-actions {
+    min-width: 0;
     grid-template-columns: 1fr;
   }
 

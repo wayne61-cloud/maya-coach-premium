@@ -171,7 +171,10 @@ alter table ai_memory enable row level security;
 alter table profiles add column if not exists email text;
 alter table profiles add column if not exists role text not null default 'user';
 alter table profiles add column if not exists account_status text not null default 'active';
-alter table profiles alter column account_status set default 'pending';
+alter table profiles add column if not exists bio text not null default '';
+alter table profiles add column if not exists moderation_reason text not null default '';
+alter table profiles add column if not exists deleted_at timestamptz;
+alter table profiles alter column account_status set default 'active';
 
 do $$
 begin
@@ -211,7 +214,7 @@ as $$
     select 1
     from public.profiles
     where auth_user_id = auth.uid()
-      and coalesce(account_status, 'pending') = 'active'
+      and coalesce(account_status, 'active') = 'active'
   );
 $$;
 
@@ -227,7 +230,7 @@ as $$
     from public.profiles
     where id = target_profile_id
       and auth_user_id = auth.uid()
-      and coalesce(account_status, 'pending') = 'active'
+      and coalesce(account_status, 'active') = 'active'
   );
 $$;
 
@@ -244,7 +247,7 @@ as $$
     join public.profiles on public.profiles.id = public.sessions.profile_id
     where public.sessions.id = target_session_id
       and public.profiles.auth_user_id = auth.uid()
-      and coalesce(public.profiles.account_status, 'pending') = 'active'
+      and coalesce(public.profiles.account_status, 'active') = 'active'
   );
 $$;
 
@@ -350,6 +353,216 @@ as $$
   );
 $$;
 
+create or replace function public.admin_get_user_detail(target_profile_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, auth, storage
+as $$
+declare
+  target_profile public.profiles%rowtype;
+  notes_payload jsonb := '[]'::jsonb;
+begin
+  if not public.is_admin_user() then
+    raise exception 'Accès admin requis';
+  end if;
+
+  select *
+  into target_profile
+  from public.profiles
+  where id = target_profile_id;
+
+  if not found then
+    raise exception 'Utilisateur introuvable';
+  end if;
+
+  select coalesce(
+    jsonb_agg(note_row.item order by note_row.sort_date desc nulls last),
+    '[]'::jsonb
+  )
+  into notes_payload
+  from (
+    select
+      progress_photos.photo_date::timestamp as sort_date,
+      jsonb_build_object(
+        'id', concat('photo:', progress_photos.id),
+        'kind', 'photo',
+        'title', coalesce(progress_photos.zone, 'Photo'),
+        'date', progress_photos.photo_date,
+        'description', trim(concat_ws(' • ', nullif(progress_photos.context, ''), nullif(progress_photos.note, ''))),
+        'context', coalesce(progress_photos.zone, ''),
+        'meta', jsonb_build_object(
+          'weightKg', progress_photos.weight_kg,
+          'heightCm', progress_photos.height_cm
+        )
+      ) as item
+    from public.progress_photos
+    where progress_photos.profile_id = target_profile_id
+      and (coalesce(progress_photos.context, '') <> '' or coalesce(progress_photos.note, '') <> '')
+
+    union all
+
+    select
+      body_metrics.metric_date::timestamp as sort_date,
+      jsonb_build_object(
+        'id', concat('metric:', body_metrics.id),
+        'kind', 'metric',
+        'title', 'Suivi poids',
+        'date', body_metrics.metric_date,
+        'description', coalesce(body_metrics.notes, ''),
+        'context', case
+          when body_metrics.weight_kg is not null then concat(body_metrics.weight_kg, ' kg')
+          else ''
+        end,
+        'meta', jsonb_build_object()
+      ) as item
+    from public.body_metrics
+    where body_metrics.profile_id = target_profile_id
+      and coalesce(body_metrics.notes, '') <> ''
+
+    union all
+
+    select
+      nutrition_days.log_date::timestamp as sort_date,
+      jsonb_build_object(
+        'id', concat('nutrition:', nutrition_days.id),
+        'kind', 'nutrition',
+        'title', coalesce(nutrition_days.goal, 'Nutrition'),
+        'date', nutrition_days.log_date,
+        'description', array_to_string(array(select jsonb_array_elements_text(coalesce(nutrition_days.notes, '[]'::jsonb))), ' • '),
+        'context', coalesce(nutrition_days.training_load, ''),
+        'meta', jsonb_build_object(
+          'calories', nutrition_days.calories
+        )
+      ) as item
+    from public.nutrition_days
+    where nutrition_days.profile_id = target_profile_id
+      and jsonb_typeof(coalesce(nutrition_days.notes, '[]'::jsonb)) = 'array'
+      and jsonb_array_length(coalesce(nutrition_days.notes, '[]'::jsonb)) > 0
+
+    union all
+
+    select
+      recovery_logs.created_at as sort_date,
+      jsonb_build_object(
+        'id', concat('recovery:', recovery_logs.id),
+        'kind', 'recovery',
+        'title', coalesce(recovery_logs.title, 'Recovery'),
+        'date', recovery_logs.created_at,
+        'description', coalesce(recovery_logs.stress_impact, ''),
+        'context', coalesce(recovery_logs.source, ''),
+        'meta', jsonb_build_object()
+      ) as item
+    from public.recovery_logs
+    where recovery_logs.profile_id = target_profile_id
+      and coalesce(recovery_logs.stress_impact, '') <> ''
+  ) as note_row;
+
+  return jsonb_build_object(
+    'profile', jsonb_build_object(
+      'id', target_profile.id,
+      'auth_user_id', target_profile.auth_user_id,
+      'email', coalesce(target_profile.email, ''),
+      'name', coalesce(target_profile.name, ''),
+      'bio', coalesce(target_profile.bio, ''),
+      'age', target_profile.age,
+      'weight_kg', target_profile.weight_kg,
+      'role', coalesce(target_profile.role, 'user'),
+      'account_status', coalesce(target_profile.account_status, 'active'),
+      'moderation_reason', coalesce(target_profile.moderation_reason, ''),
+      'deleted_at', target_profile.deleted_at,
+      'goal', coalesce(target_profile.goal, 'muscle'),
+      'level', coalesce(target_profile.level, '2'),
+      'frequency', coalesce(target_profile.frequency, '3'),
+      'place', coalesce(target_profile.place, 'mixte'),
+      'session_time', coalesce(target_profile.session_time, '35'),
+      'preferred_split', coalesce(target_profile.preferred_split, 'adaptive'),
+      'food_preference', coalesce(target_profile.food_preference, 'omnivore'),
+      'recovery_preference', coalesce(target_profile.recovery_preference, 'equilibre'),
+      'coach_tone', coalesce(target_profile.coach_tone, 'direct'),
+      'photo_path', coalesce(target_profile.photo_path, ''),
+      'created_at', target_profile.created_at
+    ),
+    'notes', notes_payload
+  );
+end;
+$$;
+
+create or replace function public.admin_remove_user_account(target_profile_id uuid, delete_reason text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, auth, storage
+as $$
+declare
+  target_profile public.profiles%rowtype;
+  safe_reason text := left(trim(coalesce(delete_reason, '')), 240);
+begin
+  if not public.is_admin_user() then
+    raise exception 'Accès admin requis';
+  end if;
+
+  if safe_reason = '' then
+    raise exception 'Raison requise';
+  end if;
+
+  select *
+  into target_profile
+  from public.profiles
+  where id = target_profile_id;
+
+  if not found then
+    raise exception 'Utilisateur introuvable';
+  end if;
+
+  if target_profile.role = 'admin' or target_profile.auth_user_id = auth.uid() then
+    raise exception 'Impossible de supprimer ce compte';
+  end if;
+
+  delete from public.progress_photos where profile_id = target_profile.id;
+  delete from public.body_metrics where profile_id = target_profile.id;
+  delete from public.nutrition_days where profile_id = target_profile.id;
+  delete from public.sessions where profile_id = target_profile.id;
+  delete from public.recovery_logs where profile_id = target_profile.id;
+  delete from public.goals where profile_id = target_profile.id;
+  delete from public.recipes_favorites where profile_id = target_profile.id;
+  delete from public.badges where profile_id = target_profile.id;
+  delete from public.streaks where profile_id = target_profile.id;
+  delete from public.ai_memory where profile_id = target_profile.id;
+
+  update public.profiles
+  set
+    age = null,
+    weight_kg = null,
+    bio = '',
+    photo_path = null,
+    account_status = 'banned',
+    moderation_reason = safe_reason,
+    deleted_at = now(),
+    goal = 'muscle',
+    level = '2',
+    frequency = '3',
+    place = 'mixte',
+    session_time = '35',
+    preferred_split = 'adaptive',
+    food_preference = 'omnivore',
+    recovery_preference = 'equilibre',
+    coach_tone = 'direct',
+    updated_at = now()
+  where id = target_profile.id;
+
+  return jsonb_build_object(
+    'ok', true,
+    'profile_id', target_profile.id,
+    'email', coalesce(target_profile.email, ''),
+    'reason', safe_reason
+  );
+end;
+$$;
+
+grant execute on function public.admin_get_user_detail(uuid) to authenticated;
+grant execute on function public.admin_remove_user_account(uuid, text) to authenticated;
+
 create or replace function public.handle_auth_user_created()
 returns trigger
 language plpgsql
@@ -365,7 +578,7 @@ begin
   end if;
 
   if next_status not in ('pending', 'active', 'suspended', 'banned') then
-    next_status := case when next_role = 'admin' then 'active' else 'pending' end;
+    next_status := 'active';
   end if;
 
   insert into public.profiles (
@@ -559,7 +772,7 @@ select
     when lower(coalesce(users.raw_user_meta_data->>'app_role', users.raw_user_meta_data->>'role', 'user')) = 'admin' then 'active'
     when lower(coalesce(users.raw_user_meta_data->>'account_status', '')) in ('pending', 'active', 'suspended', 'banned')
       then lower(users.raw_user_meta_data->>'account_status')
-    else 'pending'
+    else 'active'
   end,
   coalesce(users.created_at, now()),
   now()
@@ -571,3 +784,10 @@ on conflict (auth_user_id) do update
         else profiles.name
       end,
       updated_at = now();
+
+update public.profiles
+set
+  account_status = 'active',
+  updated_at = now()
+where role <> 'admin'
+  and coalesce(account_status, 'active') = 'pending';
