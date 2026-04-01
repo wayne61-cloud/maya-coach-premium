@@ -16,7 +16,10 @@ export const STORAGE_KEYS = {
   customWorkoutDraft: "maya_custom_workout_draft_v1",
   visualProgressEntries: "maya_visual_progress_entries_v1",
   previewUsers: "maya_preview_users_v1",
-  previewSession: "maya_preview_session_v1"
+  previewSession: "maya_preview_session_v1",
+  theme: "maya_theme_v1",
+  runs: "maya_runs_v1",
+  activeRun: "maya_active_run_v1"
 };
 
 export function loadJSON(key, fallback) {

@@ -6,6 +6,7 @@ import {
   RUNNER_SESSIONS,
   RUNNER_STRENGTH_BLOCKS
 } from "../../data/runner.js";
+import { formatDistance, formatPace, formatRunDuration, getActiveRunPace } from "../gps.js";
 import { getSharedDashboardData } from "../insights.js";
 import { state } from "../state.js";
 import { buildEmptyState, escapeHtml } from "../utils.js";
@@ -30,40 +31,149 @@ function renderRunnerTabs(activePage) {
   `;
 }
 
-function renderRoutePreview() {
-  const points = RUNNER_DASHBOARD.liveRun.routePoints
-    .map(([x, y], index) => `${index === 0 ? "M" : "L"} ${x} ${y}`)
-    .join(" ");
+function renderLiveRunDashboard() {
+  const run = state.activeRun;
+  if (!run) return "";
+
+  const pace = getActiveRunPace();
+  const calories = run.distanceM > 0
+    ? Math.round((run.distanceM / 1000) * (parseFloat(state.profile?.weightKg || "70") || 70) * 1.036)
+    : 0;
+
+  const isRunning = run.status === "running";
+  const isPaused = run.status === "paused";
 
   return `
-    <div class="runner-map-card">
-      <div class="runner-map-copy">
-        <strong>Tracking live</strong>
-        <span>Stats en temps réel et coaching audio pendant ta sortie.</span>
+    <div class="run-live-card">
+      <div class="run-live-header">
+        <span class="eyebrow">Course en cours</span>
+        <span class="run-live-status ${isRunning ? "run-status-active" : "run-status-paused"}">${isRunning ? "GPS actif" : "En pause"}</span>
       </div>
-      <svg class="runner-map-svg" viewBox="0 0 104 88" preserveAspectRatio="none" aria-hidden="true">
-        <defs>
-          <linearGradient id="runnerPath" x1="0%" x2="100%" y1="0%" y2="0%">
-            <stop offset="0%" stop-color="#27c7a7"></stop>
-            <stop offset="100%" stop-color="#7ee9cb"></stop>
-          </linearGradient>
-        </defs>
-        <rect x="1" y="1" width="102" height="86" rx="18"></rect>
-        <path class="runner-map-grid" d="M20 8v72M40 8v72M60 8v72M80 8v72M8 24h88M8 44h88M8 64h88"></path>
-        <path class="runner-map-path" d="${points}"></path>
-        <circle cx="98" cy="56" r="4"></circle>
-      </svg>
-      <div class="runner-map-stats">
-        <span>${RUNNER_DASHBOARD.liveRun.distanceKm} km</span>
-        <span>${RUNNER_DASHBOARD.liveRun.pace}</span>
-        <span>${RUNNER_DASHBOARD.liveRun.heartRate} bpm</span>
+
+      <div class="run-live-stats">
+        <div class="run-live-stat run-live-stat-main">
+          <span class="run-live-value">${formatDistance(run.distanceM)}</span>
+          <span class="run-live-label">Distance</span>
+        </div>
+        <div class="run-live-stat">
+          <span class="run-live-value">${formatRunDuration(run.durationSec)}</span>
+          <span class="run-live-label">Durée</span>
+        </div>
+        <div class="run-live-stat">
+          <span class="run-live-value">${formatPace(pace)}</span>
+          <span class="run-live-label">Allure</span>
+        </div>
+        <div class="run-live-stat">
+          <span class="run-live-value">${calories}</span>
+          <span class="run-live-label">kcal</span>
+        </div>
+      </div>
+
+      <div id="runLiveMap" class="run-map-container"></div>
+
+      ${run.splits.length ? `
+        <div class="run-splits-strip">
+          ${run.splits.map((s) => `<span class="pill pill-soft">km ${s.km} — ${formatPace(s.paceSec)}</span>`).join("")}
+        </div>
+      ` : ""}
+
+      <div class="run-live-controls">
+        ${isRunning ? `
+          <button class="btn btn-outline" data-action="run-pause">${icon("timer", "", 14)} Pause</button>
+          <button class="btn btn-bad" data-action="run-finish">${icon("target", "", 14)} Terminer</button>
+        ` : ""}
+        ${isPaused ? `
+          <button class="btn btn-main" data-action="run-resume">${icon("spark", "", 14)} Reprendre</button>
+          <button class="btn btn-outline" data-action="run-discard">Annuler</button>
+          <button class="btn btn-bad" data-action="run-finish">${icon("target", "", 14)} Terminer</button>
+        ` : ""}
       </div>
     </div>
   `;
 }
 
+function renderStartRunCard() {
+  if (state.activeRun) return "";
+
+  return `
+    <div class="runner-map-card run-start-card">
+      <div class="runner-map-copy">
+        <strong>${icon("target", "", 16)} Lancer une course</strong>
+        <span>GPS en temps réel, allure, distance et coaching.</span>
+      </div>
+      <div class="run-type-selector">
+        <button class="btn btn-main" data-action="run-start" data-run-type="free">Course libre</button>
+        <button class="btn btn-outline" data-action="run-start" data-run-type="tempo">Tempo</button>
+        <button class="btn btn-outline" data-action="run-start" data-run-type="endurance">Endurance</button>
+        <button class="btn btn-outline" data-action="run-start" data-run-type="intervals">Fractionné</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderRunHistory() {
+  const runs = state.runs || [];
+  if (!runs.length) return "";
+
+  const recent = runs.slice(0, 5);
+  return `
+    <article class="runner-surface-card">
+      <div class="runner-block-head">
+        <div>
+          <span class="eyebrow">Historique</span>
+          <h3>Tes dernières courses</h3>
+        </div>
+        <span class="pill">${runs.length} course${runs.length > 1 ? "s" : ""}</span>
+      </div>
+      <div class="run-history-list">
+        ${recent.map((run) => {
+          const date = new Date(run.startedAt);
+          const dateStr = `${date.getDate()}/${date.getMonth() + 1}`;
+          return `
+            <div class="run-history-card">
+              <div class="run-history-top">
+                <strong>${escapeHtml(run.title)}</strong>
+                <span class="muted">${dateStr}</span>
+              </div>
+              <div class="run-history-stats">
+                <span>${icon("target", "", 13)} ${formatDistance(run.distanceM)}</span>
+                <span>${icon("timer", "", 13)} ${formatRunDuration(run.durationSec)}</span>
+                <span>${icon("spark", "", 13)} ${formatPace(run.avgPaceSec)}</span>
+                <span>${icon("fire", "", 13)} ${run.caloriesEstimate || 0} kcal</span>
+              </div>
+              ${run.gpsPoints?.length > 1 ? `<div data-run-map="${escapeHtml(run.id)}" class="run-map-preview"></div>` : ""}
+            </div>
+          `;
+        }).join("")}
+      </div>
+    </article>
+  `;
+}
+
+function computeWeeklyRunTrend() {
+  const runs = state.runs || [];
+  if (!runs.length) return [];
+  const now = new Date();
+  const weeks = [];
+  for (let w = 4; w >= 0; w--) {
+    const weekStart = new Date(now);
+    weekStart.setDate(weekStart.getDate() - (w * 7 + weekStart.getDay()));
+    weekStart.setHours(0, 0, 0, 0);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    const weekRuns = runs.filter((r) => {
+      const d = new Date(r.startedAt);
+      return d >= weekStart && d < weekEnd;
+    });
+    const totalKm = weekRuns.reduce((sum, r) => sum + (r.distanceM || 0) / 1000, 0);
+    weeks.push({ label: `S-${w}`, value: Math.round(totalKm * 10) / 10 });
+  }
+  return weeks.some((w) => w.value > 0) ? weeks : [];
+}
+
 export function renderRunnerHome(node) {
   const shared = getSharedDashboardData();
+  const hasActiveRun = Boolean(state.activeRun);
 
   node.innerHTML = `
     <div class="section runner-screen">
@@ -79,6 +189,7 @@ export function renderRunnerHome(node) {
 
         ${renderRunnerTabs("runner-home")}
 
+        ${hasActiveRun ? "" : `
         <div class="runner-metric-grid">
           <article class="runner-metric-card">
             <span>${icon("timer", "", 16)} Séance du jour</span>
@@ -101,10 +212,12 @@ export function renderRunnerHome(node) {
             <small>${escapeHtml(RUNNER_DASHBOARD.weather.bestWindow)}</small>
           </article>
         </div>
+        `}
 
-        <div class="runner-hero-grid">
-          ${renderRoutePreview()}
+        <div class="runner-hero-grid" ${hasActiveRun ? 'style="grid-template-columns:1fr"' : ""}>
+          ${hasActiveRun ? renderLiveRunDashboard() : renderStartRunCard()}
 
+          ${hasActiveRun ? "" : `
           <div class="runner-audio-card">
             <div class="runner-block-head">
               <div>
@@ -126,8 +239,11 @@ export function renderRunnerHome(node) {
               <button class="btn btn-outline" data-action="go-page" data-page="runner-performance">Suivi & perf</button>
             </div>
           </div>
+          `}
         </div>
       </div>
+
+      ${renderRunHistory()}
 
       <div class="runner-support-grid">
         <article class="runner-surface-card">
@@ -137,8 +253,8 @@ export function renderRunnerHome(node) {
               <h3>Ce que l'app retient</h3>
             </div>
           </div>
-          <p class="muted">Recovery global ${shared.recoveryScore}% • nutrition ${shared.fuelRatio}% • charge semaine ${shared.weekRatio}%.</p>
-          <p class="muted">Le runner mode peut donc ajuster le volume, le pacing et la qualité de séance avec le contexte MAYA complet.</p>
+          <p class="muted">Recovery global ${shared.recoveryScore}% · nutrition ${shared.fuelRatio}% · charge semaine ${shared.weekRatio}%.</p>
+          <p class="muted">Le mode runner ajuste volume, pacing et qualité de séance avec le contexte MAYA complet.</p>
         </article>
 
         <article class="runner-surface-card">
@@ -151,11 +267,13 @@ export function renderRunnerHome(node) {
           <div class="runner-badge-strip">
             ${RUNNER_BADGES.slice(0, 3).map((badge) => `<span class="pill pill-soft">${escapeHtml(badge.title)}</span>`).join("")}
           </div>
-          <p class="muted">Sprinter, Endurance beast, Marathoner: le rituel quotidien devient visible dès l'accueil runner.</p>
+          <p class="muted">Tes badges se débloquent avec la régularité et la progression.</p>
         </article>
       </div>
     </div>
   `;
+
+  hydrateRunnerMaps();
 }
 
 export function renderRunnerCoach(node) {
@@ -261,7 +379,7 @@ export function renderRunnerSessions(node) {
             </div>
             <div class="runner-session-footer">
               <span>${icon("spark", "", 14)} ${escapeHtml(session.audioMode)}</span>
-              <button class="ghost-link" data-action="go-page" data-page="runner-coach">Ajuster</button>
+              <button class="ghost-link" data-action="run-start" data-run-type="${escapeHtml(session.id.replace("runner_", ""))}">${icon("target", "", 14)} Lancer</button>
             </div>
           </article>
         `).join("")}
@@ -271,7 +389,7 @@ export function renderRunnerSessions(node) {
         <div class="runner-block-head">
           <div>
             <span class="eyebrow">Renforcement coureur</span>
-            <h3>Différenciation forte</h3>
+            <h3>Blocs complémentaires</h3>
           </div>
         </div>
         <div class="runner-strength-grid">
@@ -291,10 +409,8 @@ export function renderRunnerSessions(node) {
 }
 
 export function renderRunnerPerformance(node) {
-  if (!RUNNER_DASHBOARD.weeklyTrend.length) {
-    node.innerHTML = `<div class="section runner-screen"><div class="card">${buildEmptyState("Runner Mode vide", "Ajoute des runs pour débloquer le suivi performance.", "", "")}</div></div>`;
-    return;
-  }
+  const weeklyTrend = computeWeeklyRunTrend();
+  const hasRealData = weeklyTrend.length > 0;
 
   node.innerHTML = `
     <div class="section runner-screen">
@@ -324,9 +440,9 @@ export function renderRunnerPerformance(node) {
         </div>
 
         <div class="runner-chart-stack">
-          ${renderMiniAreaChart(RUNNER_DASHBOARD.weeklyTrend, {
+          ${renderMiniAreaChart(hasRealData ? weeklyTrend : RUNNER_DASHBOARD.weeklyTrend, {
             title: "Charge hebdo",
-            subtitle: "Volume qui monte sans casser le corps",
+            subtitle: hasRealData ? "Calculé depuis tes courses réelles" : "Données de démonstration",
             tone: "green",
             valueSuffix: " km"
           })}
@@ -338,6 +454,8 @@ export function renderRunnerPerformance(node) {
           })}
         </div>
       </div>
+
+      ${renderRunHistory()}
 
       <div class="runner-support-grid">
         <article class="runner-surface-card">
@@ -374,4 +492,34 @@ export function renderRunnerPerformance(node) {
       </div>
     </div>
   `;
+
+  hydrateRunnerMaps();
+}
+
+function hydrateRunnerMaps() {
+  if (typeof L === "undefined") return;
+
+  const liveMapEl = document.getElementById("runLiveMap");
+  if (liveMapEl && state.activeRun?.gpsPoints?.length > 1) {
+    const map = L.map(liveMapEl, { zoomControl: false, attributionControl: false });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
+    const coords = state.activeRun.gpsPoints.map((p) => [p.lat, p.lng]);
+    const polyline = L.polyline(coords, { color: "#27c7a7", weight: 4, opacity: 0.9 }).addTo(map);
+    map.fitBounds(polyline.getBounds(), { padding: [20, 20] });
+    const last = coords[coords.length - 1];
+    L.circleMarker(last, { radius: 7, color: "#27c7a7", fillColor: "#9bf2dc", fillOpacity: 1, weight: 2 }).addTo(map);
+  } else if (liveMapEl) {
+    liveMapEl.innerHTML = `<div class="run-map-placeholder">${icon("target", "", 24)}<span>En attente du signal GPS...</span></div>`;
+  }
+
+  document.querySelectorAll("[data-run-map]").forEach((el) => {
+    const runId = el.dataset.runMap;
+    const run = (state.runs || []).find((r) => r.id === runId);
+    if (!run?.gpsPoints?.length || run.gpsPoints.length < 2) return;
+    const map = L.map(el, { zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false, touchZoom: false });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
+    const coords = run.gpsPoints.map((p) => [p.lat, p.lng]);
+    const polyline = L.polyline(coords, { color: "#27c7a7", weight: 3, opacity: 0.8 }).addTo(map);
+    map.fitBounds(polyline.getBounds(), { padding: [10, 10] });
+  });
 }

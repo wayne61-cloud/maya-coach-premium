@@ -145,25 +145,27 @@ function renderFilterSheet() {
 function renderNutritionHeader(shared, recipes) {
   return `
     <div class="nutrition-premium-shell">
-      <div class="nutrition-header-minimal">
-        <div class="nutrition-header-copy">
-          <div class="eyebrow">Nutrition</div>
-          <h2>Nutrition</h2>
+      <div class="nutrition-header-ultra">
+        <h2>Nutrition</h2>
+        <div class="nutrition-header-meta">
+          <span>${renderNumberTicker(shared.nutrition.totals.calories)} kcal</span>
+          <span>·</span>
+          <span>${renderNumberTicker(shared.nutrition.totals.proteins, { suffix: "g" })} prot</span>
+          <span>·</span>
+          <span>${recipes.length} recettes</span>
         </div>
-        <span class="pill pill-soft">${recipes.length} recettes</span>
       </div>
 
       <div class="nutrition-topbar">
         <div class="command-shell nutrition-command-shell premium-search-shell">
           <span class="command-icon">${icon("search", "", 16)}</span>
-          <input id="nutritionSearch" class="command-input" type="text" placeholder="Pancakes, bowl, smoothie, pasta..." value="${escapeHtml(state.nutritionFilter.search)}" />
+          <input id="nutritionSearch" class="command-input" type="text" placeholder="Pancakes, bowl, smoothie..." value="${escapeHtml(state.nutritionFilter.search)}" />
           <button class="command-clear ${state.nutritionFilter.search ? "visible" : ""}" data-action="clear-nutrition-search">Effacer</button>
         </div>
         <button class="control-chip nutrition-filter-trigger" data-action="open-sheet" data-sheet="nutrition">${icon("filter", "", 14)} Filtres</button>
       </div>
 
       ${renderViewSwitch()}
-      ${renderNutritionSummary(shared)}
     </div>
   `;
 }
@@ -171,45 +173,24 @@ function renderNutritionHeader(shared, recipes) {
 function renderNutritionPlanner(shared) {
   return `
     <article class="nutrition-section-card nutrition-plan-builder">
-      <div class="nutrition-section-head">
-        <div>
-          <span class="eyebrow">Plan du jour</span>
-          <h3>Ajuster le cadre</h3>
-        </div>
-        <span class="pill">${escapeHtml(getLoadLabel(shared.nutrition.trainingLoad))}</span>
-      </div>
-
-      <div class="settings-grid compact-grid nutrition-builder-grid">
-        <div class="field-stack">
-          <label class="field-label" for="nutriGoal">Objectif</label>
+      <div class="nutrition-planner-compact">
+        <div class="nutrition-planner-fields">
           <div class="field-shell surface-form">
             <select id="nutriGoal">
               ${["muscle", "masse", "maintenance", "seche"].map((goal) => `<option value="${goal}" ${shared.nutrition.goal === goal ? "selected" : ""}>${escapeHtml(goal)}</option>`).join("")}
             </select>
           </div>
-        </div>
-        <div class="field-stack">
-          <label class="field-label" for="nutriWeight">Poids</label>
           <div class="field-shell surface-form">
-            <input id="nutriWeight" type="number" min="35" max="180" value="${escapeHtml(shared.nutrition.weightKg)}" />
+            <input id="nutriWeight" type="number" min="35" max="180" placeholder="kg" value="${escapeHtml(shared.nutrition.weightKg)}" />
           </div>
-        </div>
-        <div class="field-stack">
-          <label class="field-label" for="nutriActivity">Activité</label>
           <div class="field-shell surface-form">
             <select id="nutriActivity">
-              ${[
-                ["low", "Basse"],
-                ["medium", "Moyenne"],
-                ["high", "Haute"]
-              ].map(([value, label]) => `<option value="${value}" ${shared.nutrition.activity === value ? "selected" : ""}>${label}</option>`).join("")}
+              ${[["low", "Basse"], ["medium", "Moyenne"], ["high", "Haute"]].map(([value, label]) => `<option value="${value}" ${shared.nutrition.activity === value ? "selected" : ""}>${label}</option>`).join("")}
             </select>
           </div>
+          <button class="btn btn-main" data-action="apply-nutrition-plan">Valider</button>
         </div>
-        <div class="field-stack">
-          <label class="field-label">Action</label>
-          <button class="btn btn-main nutrition-validate-btn" data-action="apply-nutrition-plan">${icon("search", "", 14)} Valider le plan</button>
-        </div>
+        <span class="nutrition-planner-load">${escapeHtml(getLoadLabel(shared.nutrition.trainingLoad))}</span>
       </div>
     </article>
   `;

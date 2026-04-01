@@ -31,6 +31,7 @@ import {
   persistProfileSnapshots,
   persistSupabaseConfig,
   persistSyncConfig,
+  persistRuns,
   persistVisualProgressEntries,
   resetPhotoProgressDraft,
   setCustomWorkoutLibraryState,
@@ -278,6 +279,7 @@ function persistAllUserState() {
   persistCycleState();
   persistCustomWorkoutDraft();
   persistVisualProgressEntries();
+  persistRuns();
 }
 
 function hydrateManagedBackendProfile(remoteProfile = {}, userPayload = {}) {
@@ -915,6 +917,23 @@ function restoreStateFromRemote(remote) {
     state.nutritionProfile = null;
   }
 
+  state.runs = (remote.runs || []).map((row) => ({
+    id: row.id,
+    title: row.title || "",
+    runType: row.run_type || "free",
+    startedAt: row.started_at,
+    finishedAt: row.finished_at || null,
+    durationSec: row.duration_sec || 0,
+    distanceM: row.distance_m ? Number(row.distance_m) : 0,
+    avgPaceSec: row.avg_pace_sec || null,
+    bestPaceSec: row.best_pace_sec || null,
+    caloriesEstimate: row.calories_estimate || 0,
+    gpsPoints: row.gps_points || [],
+    splits: row.splits || [],
+    status: row.status || "completed",
+    metadata: row.metadata || {}
+  }));
+
   state.showOnboarding = !Boolean(state.profile?.name || state.profile?.weightKg);
   persistAllUserState();
 }
@@ -956,7 +975,8 @@ async function fetchRemoteSnapshot(profileId) {
     nutritionResult,
     recipeFavoritesResult,
     recoveryResult,
-    progressPhotosResult
+    progressPhotosResult,
+    runsResult
   ] = await Promise.all([
     client
       .from("sessions")
@@ -1020,10 +1040,15 @@ async function fetchRemoteSnapshot(profileId) {
       .from("progress_photos")
       .select("*")
       .eq("profile_id", profileId)
-      .order("photo_date", { ascending: false })
+      .order("photo_date", { ascending: false }),
+    client
+      .from("runs")
+      .select("*")
+      .eq("profile_id", profileId)
+      .order("started_at", { ascending: false })
   ]);
 
-  [sessionsResult, bodyMetricsResult, nutritionResult, recipeFavoritesResult, recoveryResult, progressPhotosResult].forEach((result) => {
+  [sessionsResult, bodyMetricsResult, nutritionResult, recipeFavoritesResult, recoveryResult, progressPhotosResult, runsResult].forEach((result) => {
     if (result.error) throw result.error;
   });
 
@@ -1039,7 +1064,8 @@ async function fetchRemoteSnapshot(profileId) {
     nutritionDays: nutritionResult.data || [],
     recipeFavorites: recipeFavoritesResult.data || [],
     recoveryLogs: recoveryResult.data || [],
-    progressPhotos
+    progressPhotos,
+    runs: runsResult.data || []
   };
 }
 
@@ -1264,6 +1290,29 @@ export async function pushSupabaseSnapshot() {
 
   await replaceRows(client, "badges", mapBadgeRows(profileId), "profile_id", profileId);
   await replaceRows(client, "streaks", mapStreakRows(profileId, shared), "profile_id", profileId);
+
+  await replaceRows(
+    client,
+    "runs",
+    (state.runs || []).map((run) => ({
+      profile_id: profileId,
+      title: run.title || "",
+      run_type: run.runType || "free",
+      started_at: run.startedAt,
+      finished_at: run.finishedAt || null,
+      duration_sec: run.durationSec || 0,
+      distance_m: run.distanceM || 0,
+      avg_pace_sec: run.avgPaceSec || null,
+      best_pace_sec: run.bestPaceSec || null,
+      calories_estimate: run.caloriesEstimate || 0,
+      gps_points: run.gpsPoints || [],
+      splits: run.splits || [],
+      status: run.status || "completed",
+      metadata: run.metadata || {}
+    })),
+    "profile_id",
+    profileId
+  );
 
   const aiContext = {
     profile: state.profile,

@@ -42,6 +42,144 @@
   --keyboard-offset: 0px;
 }
 
+[data-theme="light"] {
+  --bg: #f5f3ef;
+  --bg-soft: #eae7e1;
+  --panel: #ffffff;
+  --panel-2: #f0ede8;
+  --surface-home: linear-gradient(170deg, rgba(255, 250, 240, 0.98), rgba(245, 243, 239, 0.99));
+  --surface-form: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 246, 242, 0.99));
+  --surface-settings: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 246, 242, 0.99));
+  --surface-stats: linear-gradient(170deg, rgba(245, 248, 252, 0.98), rgba(240, 242, 246, 0.99));
+  --line: rgba(180, 160, 100, 0.18);
+  --border-subtle: rgba(120, 100, 60, 0.10);
+  --border-active: rgba(180, 150, 50, 0.28);
+  --text: #2c2a26;
+  --text-strong: #1a1816;
+  --text-soft: #6b6560;
+  --muted: #8a847c;
+  --brand: #d4a520;
+  --brand-2: #c49520;
+  --accent-coach: #d4a520;
+  --accent-exos: #d08a30;
+  --accent-nutrition: #3a9a3a;
+  --accent-stats: #4488dd;
+  --accent-relax: #6670cc;
+  --accent-settings: #5a554e;
+  --blue: #4488dd;
+  --blue-soft: rgba(68, 136, 221, 0.12);
+  --green: #2a9a5a;
+  --green-soft: rgba(42, 154, 90, 0.12);
+  --coral: #d06840;
+  --coral-soft: rgba(208, 104, 64, 0.12);
+  --violet: #6670cc;
+  --violet-soft: rgba(102, 112, 204, 0.12);
+  --ok: #1a9a55;
+  --warn: #c48820;
+  --bad: #dd4444;
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] body,
+[data-theme="light"] .app-shell {
+  background: var(--bg);
+  color: var(--text);
+}
+
+[data-theme="light"] .quick-nav {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--line);
+}
+
+[data-theme="light"] .metric-card,
+[data-theme="light"] .section,
+[data-theme="light"] .card {
+  background: var(--panel);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] input,
+[data-theme="light"] select,
+[data-theme="light"] textarea {
+  background: var(--bg-soft);
+  color: var(--text);
+  border-color: var(--line);
+}
+
+[data-theme="light"] .leaflet-tile-pane {
+  filter: none;
+}
+
+[data-theme="light"] .header {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(248, 246, 240, 0.95));
+  border-bottom-color: var(--line);
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .header-title,
+[data-theme="light"] .header-title-copy {
+  text-shadow: none;
+  color: var(--text-strong);
+}
+
+[data-theme="light"] .header-page {
+  color: var(--text-soft);
+}
+
+[data-theme="light"] .header-logout {
+  color: var(--text-soft);
+  border-color: var(--line);
+}
+
+[data-theme="light"] .bottom-nav,
+[data-theme="light"] .quick-nav {
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--line);
+}
+
+[data-theme="light"] .nav-btn,
+[data-theme="light"] .quick-nav-btn {
+  color: var(--text-soft);
+}
+
+[data-theme="light"] .nav-btn.active,
+[data-theme="light"] .quick-nav-btn.active {
+  color: var(--brand);
+}
+
+[data-theme="light"] .sheet-backdrop {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+[data-theme="light"] .bottom-sheet {
+  background: var(--panel);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .pill {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text);
+}
+
+[data-theme="light"] .btn-outline {
+  border-color: var(--line);
+  color: var(--text);
+}
+
+[data-theme="light"] .eyebrow {
+  color: var(--text-soft);
+}
+
+[data-theme="light"] .settings-accordion summary {
+  color: var(--text);
+}
+
+[data-theme="light"] .summary-chip {
+  border-color: var(--border-subtle);
+}
+
 .nav-btn[data-page="runner-home"].active {
   color: #9bf2dc;
 }
@@ -112,11 +250,50 @@
   letter-spacing: 0.08em;
 }
 
+.nutrition-header-ultra {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.nutrition-header-ultra h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.nutrition-header-ultra .nutrition-header-meta {
+  display: flex;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.nutrition-planner-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nutrition-planner-fields {
+  display: grid;
+  grid-template-columns: 1fr 70px 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.nutrition-planner-load {
+  font-size: 0.68rem;
+  color: var(--text-soft);
+  text-align: right;
+}
+
 .nutrition-topbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
-  margin-top: 14px;
+  margin-top: 10px;
 }
 
 .premium-search-shell {
@@ -568,6 +745,208 @@
   font-size: 0.72rem;
   color: rgba(255, 255, 255, 0.6);
   line-height: 1.4;
+}
+
+/* ── Live Run Dashboard ── */
+
+.run-live-card {
+  padding: 18px;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top left, rgba(27, 167, 140, 0.18), transparent 40%),
+    rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(126, 233, 203, 0.14);
+  display: grid;
+  gap: 14px;
+}
+
+.run-live-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.run-live-status {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.run-status-active {
+  background: rgba(126, 233, 203, 0.18);
+  color: #9bf2dc;
+  animation: pulse-gps 2s ease-in-out infinite;
+}
+
+.run-status-paused {
+  background: rgba(255, 215, 102, 0.18);
+  color: #ffe27d;
+}
+
+@keyframes pulse-gps {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.run-live-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.run-live-stat {
+  text-align: center;
+  padding: 12px 6px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.run-live-stat-main {
+  background: rgba(126, 233, 203, 0.08);
+  border: 1px solid rgba(126, 233, 203, 0.12);
+}
+
+.run-live-value {
+  display: block;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #effff9;
+  line-height: 1.3;
+}
+
+.run-live-stat-main .run-live-value {
+  font-size: 1.4rem;
+  color: #9bf2dc;
+}
+
+.run-live-label {
+  display: block;
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.52);
+  margin-top: 2px;
+}
+
+.run-live-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.run-live-controls .btn {
+  flex: 1;
+  min-width: 100px;
+}
+
+.run-splits-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ── Map Containers ── */
+
+.run-map-container {
+  width: 100%;
+  height: 200px;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #0d1212;
+}
+
+.run-map-preview {
+  width: 100%;
+  height: 120px;
+  border-radius: 14px;
+  overflow: hidden;
+  margin-top: 8px;
+  background: #0d1212;
+}
+
+.run-map-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: rgba(126, 233, 203, 0.4);
+  font-size: 0.75rem;
+  animation: pulse-gps 2s ease-in-out infinite;
+}
+
+/* Dark Leaflet tiles */
+.leaflet-tile-pane {
+  filter: brightness(0.65) contrast(1.15) saturate(0.7) hue-rotate(10deg);
+}
+
+.leaflet-container {
+  background: #0d1212;
+}
+
+/* ── Start Run Card ── */
+
+.run-start-card {
+  display: grid;
+  gap: 14px;
+}
+
+.run-type-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.run-type-selector .btn {
+  flex: 1;
+  min-width: 90px;
+}
+
+/* ── Run History ── */
+
+.run-history-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.run-history-card {
+  padding: 14px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  display: grid;
+  gap: 8px;
+}
+
+.run-history-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.run-history-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 0.78rem;
+}
+
+.run-history-stats span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: rgba(255, 255, 255, 0.68);
+}
+
+@media (max-width: 640px) {
+  .run-live-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .nutrition-planner-fields {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 .app[data-page^="runner"] .header,
@@ -5395,6 +5774,13 @@ html.keyboard-open .quick-nav {
 .settings-accordion-meta {
   color: var(--text-soft);
   font-size: 0.68rem;
+}
+
+.theme-switcher-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 10px 0 4px;
 }
 
 .sheet-backdrop {

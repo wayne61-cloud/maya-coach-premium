@@ -25,10 +25,11 @@ import {
   testSupabaseConfig
 } from "./supabase.js";
 import { pullSyncSnapshot, pushSyncSnapshot, scheduleAutoSync } from "./sync.js";
-import { defaultCustomWorkoutDraft, defaultProfile, persistFavorites, persistVisualProgressEntries, resetPhotoProgressDraft, state, updateProfile } from "./state.js";
+import { applyThemeToDOM, defaultCustomWorkoutDraft, defaultProfile, persistFavorites, persistTheme, persistVisualProgressEntries, resetPhotoProgressDraft, sanitizeTheme, state, updateProfile } from "./state.js";
 import { dayKey, readErrorMessage } from "./utils.js";
 import { APP_VERSION } from "./version.js";
 import { appendExerciseToCustomWorkout, applyFeedback, buildAdjustedPlan, buildCustomPlanFromDraft, buildCustomWorkoutCoachAlerts, buildNoushiChallengePlan, createCustomWorkoutSession, createProtocolHistoryEntry, finishWorkout, historyEntryToPlan, removeCustomWorkoutSession, resetCustomWorkoutDraft, setActiveCustomWorkoutSession, setCustomWorkoutDraft, startPlan, workoutDoneAction, workoutModifyAction, workoutSkipAction } from "./workout.js";
+import { startRun, pauseRun, resumeRun, finishRun, discardRun, restoreActiveRun } from "./gps.js";
 
 /* ── Debounce for search inputs ── */
 const debouncedRefresh = (() => {
@@ -79,6 +80,22 @@ function syncAdminLiveRefresh() {
     syncAdminLiveRefresh.timer = window.setInterval(() => {
       refreshAdminLiveNow({ silent: true }).catch(() => {});
     }, 3000);
+  }
+}
+
+function syncRunLiveRefresh() {
+  const shouldRun = state.activeRun && String(state.page || "").startsWith("runner-");
+  if (!shouldRun) {
+    if (syncRunLiveRefresh.timer) {
+      clearInterval(syncRunLiveRefresh.timer);
+      syncRunLiveRefresh.timer = 0;
+    }
+    return;
+  }
+  if (!syncRunLiveRefresh.timer) {
+    syncRunLiveRefresh.timer = window.setInterval(() => {
+      refreshCurrentPage();
+    }, 1000);
   }
 }
 
@@ -515,6 +532,7 @@ async function saveProfileFromInputs() {
 async function navigateToPage(page, options = {}) {
   goToPage(page, options);
   syncAdminLiveRefresh();
+  syncRunLiveRefresh();
 
   if (page === "admin" && state.profile?.role === "admin" && isCloudSessionReady()) {
     try {
@@ -870,6 +888,45 @@ async function routeAction(action, target) {
       return;
     case "go-page":
       await navigateToPage(target.dataset.page);
+      return;
+    case "run-start": {
+      const runType = target.dataset.runType || "free";
+      try {
+        await startRun(runType);
+        showToast("Course lancée, GPS actif");
+        syncRunLiveRefresh();
+        refreshCurrentPage();
+      } catch (err) {
+        showToast(err.message || "Erreur GPS");
+      }
+      return;
+    }
+    case "run-pause":
+      pauseRun();
+      refreshCurrentPage();
+      return;
+    case "run-resume":
+      resumeRun();
+      syncRunLiveRefresh();
+      refreshCurrentPage();
+      return;
+    case "run-finish":
+      finishRun();
+      syncRunLiveRefresh();
+      scheduleAutoSync();
+      showToast("Course enregistrée");
+      refreshCurrentPage();
+      return;
+    case "run-discard":
+      discardRun();
+      syncRunLiveRefresh();
+      showToast("Course annulée");
+      refreshCurrentPage();
+      return;
+    case "set-theme":
+      state.theme = sanitizeTheme(target.dataset.value);
+      persistTheme();
+      refreshCurrentPage();
       return;
     case "go-back":
       goBack();
@@ -1691,6 +1748,8 @@ async function init() {
   bindEvents();
   registerServiceWorker().catch(() => {});
   startNotificationPulse();
+  restoreActiveRun();
+  applyThemeToDOM(state.theme);
   if (typeof window !== "undefined") {
     let reloadedForController = false;
     navigator.serviceWorker?.addEventListener?.("controllerchange", () => {

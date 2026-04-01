@@ -516,6 +516,21 @@ function renderAISyncTab(shared, diagnostics) {
         </div>
       </details>
 
+      <details class="settings-accordion">
+        <summary>
+          <span class="settings-accordion-copy">
+            <strong>Apparence</strong>
+            <small>Thème clair, sombre ou automatique.</small>
+          </span>
+          <span class="settings-accordion-meta">${state.theme === "light" ? "clair" : state.theme === "auto" ? "auto" : "sombre"}</span>
+        </summary>
+        <div class="theme-switcher-row">
+          <button class="btn ${state.theme === "dark" ? "btn-main" : "btn-outline"}" data-action="set-theme" data-value="dark">Sombre</button>
+          <button class="btn ${state.theme === "light" ? "btn-main" : "btn-outline"}" data-action="set-theme" data-value="light">Clair</button>
+          <button class="btn ${state.theme === "auto" ? "btn-main" : "btn-outline"}" data-action="set-theme" data-value="auto">Auto</button>
+        </div>
+      </details>
+
       <div class="settings-summary-grid">
         <div class="summary-chip summary-chip-blue">
           <span class="summary-label">Build</span>

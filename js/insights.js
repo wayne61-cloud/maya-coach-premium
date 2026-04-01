@@ -254,6 +254,23 @@ function buildFocusSession(profile, recommendations) {
   };
 }
 
+export function getRunWeeklySummary() {
+  const now = new Date();
+  const weekRuns = (state.runs || []).filter((run) => {
+    if (!run.startedAt || run.status !== "completed") return false;
+    return sameWeek(new Date(run.startedAt), now);
+  });
+  const totalDistanceM = weekRuns.reduce((sum, r) => sum + (r.distanceM || 0), 0);
+  const totalDurationSec = weekRuns.reduce((sum, r) => sum + (r.durationSec || 0), 0);
+  const totalCalories = weekRuns.reduce((sum, r) => sum + (r.caloriesEstimate || 0), 0);
+  return {
+    count: weekRuns.length,
+    totalDistanceKm: Math.round(totalDistanceM / 100) / 10,
+    totalDurationMin: Math.round(totalDurationSec / 60),
+    totalCalories
+  };
+}
+
 export function getSharedDashboardData() {
   const profile = state.profile || defaultProfile;
   const stats = computeDashboardStats();
@@ -290,6 +307,7 @@ export function getSharedDashboardData() {
     relatedRecipes: getTrainingAwareRecipeSuggestions(profile.goal || "maintenance"),
     badges: buildBadgeCollection(stats),
     progressPoints,
-    feedItems: buildFeedItems(stats, weightEvolution, recommendations)
+    feedItems: buildFeedItems(stats, weightEvolution, recommendations),
+    runWeeklySummary: getRunWeeklySummary()
   };
 }

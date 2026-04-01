@@ -220,6 +220,11 @@ export function sanitizeNotificationConfig(raw) {
   };
 }
 
+export function sanitizeTheme(raw) {
+  const valid = ["dark", "light", "auto"];
+  return valid.includes(raw) ? raw : "dark";
+}
+
 export function sanitizeAuthState(raw) {
   const auth = raw || {};
   return {
@@ -257,6 +262,7 @@ function resolveStoredCustomWorkoutState(raw) {
 const storedCustomWorkoutState = resolveStoredCustomWorkoutState(storedCustomWorkoutDraft);
 
 export const state = {
+  theme: sanitizeTheme(loadJSON(STORAGE_KEYS.theme, "dark")),
   page: "auth",
   pageHistory: [],
   navExpanded: false,
@@ -278,6 +284,8 @@ export const state = {
     focus: "all",
     readiness: "stable"
   },
+  runs: loadJSON(STORAGE_KEYS.runs, []),
+  activeRun: loadJSON(STORAGE_KEYS.activeRun, null),
   favorites: new Set(loadJSON(STORAGE_KEYS.favorites, [])),
   history: loadJSON(STORAGE_KEYS.history, []),
   nutritionProfile: loadJSON(STORAGE_KEYS.nutritionProfile, null),
@@ -431,6 +439,31 @@ export function persistCustomWorkoutDraft() {
 
 export function persistVisualProgressEntries() {
   saveJSON(STORAGE_KEYS.visualProgressEntries, state.visualProgressEntries);
+}
+
+export function persistTheme() {
+  saveJSON(STORAGE_KEYS.theme, state.theme);
+  applyThemeToDOM(state.theme);
+}
+
+export function applyThemeToDOM(theme) {
+  const resolved = theme === "auto"
+    ? (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
+    : theme;
+  document.documentElement.setAttribute("data-theme", resolved);
+}
+
+export function persistRuns() {
+  saveJSON(STORAGE_KEYS.runs, state.runs);
+}
+
+export function persistActiveRun() {
+  if (!state.activeRun) {
+    saveJSON(STORAGE_KEYS.activeRun, null);
+    return;
+  }
+  const { gpsWatchId, timerHandle, ...persistable } = state.activeRun;
+  saveJSON(STORAGE_KEYS.activeRun, persistable);
 }
 
 export function persistSyncConfig() {

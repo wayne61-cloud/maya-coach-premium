@@ -11,6 +11,7 @@ import {
   persistCustomWorkoutDraft,
   persistProfile,
   persistProfileSnapshots,
+  persistRuns,
   persistSyncConfig,
   setCustomWorkoutLibraryState,
   persistVisualProgressEntries,
@@ -37,6 +38,7 @@ function buildSyncPayload() {
     },
     customWorkoutDraft: state.customWorkoutDraft || null,
     visualProgressEntries: state.visualProgressEntries || [],
+    runs: state.runs || [],
     aiConfig: state.aiConfig || null,
     notificationConfig: state.notificationConfig || null
   };
@@ -158,6 +160,7 @@ export async function pullSyncSnapshot() {
     state.visualProgressEntries = Array.isArray(remote.visualProgressEntries)
       ? remote.visualProgressEntries.map((entry) => sanitizeVisualProgressEntry(entry)).filter((entry) => entry.photoDataUrl)
       : state.visualProgressEntries;
+    state.runs = Array.isArray(remote.runs) ? remote.runs : state.runs;
     state.aiConfig = remote.aiConfig ? sanitizeAIConfig(remote.aiConfig) : state.aiConfig;
     state.notificationConfig = remote.notificationConfig ? sanitizeNotificationConfig(remote.notificationConfig) : state.notificationConfig;
 
@@ -169,6 +172,7 @@ export async function pullSyncSnapshot() {
     persistNutritionHistory();
     persistCustomWorkoutDraft();
     persistVisualProgressEntries();
+    persistRuns();
     persistAIConfig();
     persistNotificationConfig();
 
